@@ -1,1 +1,96 @@
-{}
+{
+  "title": "Query Configuration",
+  "type": "object",
+  "properties": {
+    "query_type_selector": {
+      "title": "Query type",
+      "type": "string",
+      "enum": [
+        "Object",
+        "Custom SOQL"
+      ],
+      "default": "select",
+      "propertyOrder": 1
+    },
+    "objects": {
+      "title": "Object Name",
+      "type": "string",
+      "options": {
+        "dependencies": {
+          "fieldOne": "Object"
+        }
+      },
+      "description": "Salesforce object identifier, eg. Contact",
+      "propertyOrder": 2
+    },
+    "soql_query": {
+      "title": "SOQL Query",
+      "type": "string",
+      "options": {
+        "dependencies": {
+          "fieldOne": "Custom SOQL"
+        }
+      },
+      "description": "Specify the SOQL query, eg. SELECT Id, FirstName, LastName FROM Contact",
+      "propertyOrder": 3
+    },
+    "is_deleted": {
+      "title": "Get deleted records",
+      "type": "boolean",
+      "format": "checkbox",
+      "default": true,
+      "description": "Fetch records that have been deleted",
+      "propertyOrder": 4
+    },
+    "loading_options": {
+      "type": "object",
+      "title": "Loading Options",
+      "propertyOrder": 100,
+      "required": [
+        "incremental"
+      ],
+      "properties": {
+        "incremental_field": {
+          "type": "string",
+          "title": "Incremental Field",
+          "default": "LastModifiedDate",
+          "description": "Salesforce object field to use for incremental fetching, eg. LastModifiedDate for most Salesforce objects or CreatedDate for Salesforce History objects",
+          "propertyOrder": 300,
+          "options": {
+            "dependencies": {
+              "incremental": 1
+            }
+          }
+        },
+        "primary_key": {
+          "type": "string",
+          "title": "Primary Key",
+          "default": "Id",
+          "propertyOrder": 400,
+          "options": {
+            "dependencies": {
+              "incremental": 1
+            }
+          }
+        },
+        "incremental": {
+          "type": "number",
+          "enum": [
+            0,
+            1
+          ],
+          "options": {
+            "enum_titles": [
+              "Full Load",
+              "Incremental Update"
+            ]
+          },
+          "default": 0,
+          "title": "Load type",
+          "description": "If set to Incremental update, the result tables will be updated based on primary key and new records will be fetched. Full load overwrites the destination table each time.",
+          "propertyOrder": 200
+        }
+      }
+    }
+  }
+}

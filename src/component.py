@@ -47,9 +47,12 @@ class Component(ComponentBase):
 
         last_run = self.get_state_file().get("last_run")
 
+        # REVIEW: catch/throw from retry method user exception on login failure
         salesforce_client = self.login_to_salesforce(params)
 
         soql_queries = self.get_soql_queries(salesforce_client, params, last_run)
+
+        # REVIEW:
         results = self.run_queries(salesforce_client, soql_queries)
 
         for result in results:
@@ -67,13 +70,28 @@ class Component(ComponentBase):
 
     def write_results(self, results, incremental):
         for result in results["result"]:
+            # REVIEW: The Writer object as is, has no benefit here imo. Firstly, there is no need for the files to be headless.
+            # And again if the method does processes one result
+            # it would simplify the code. Consider something like this:
+            # import csv
+            # tdf = self.create_out_table_definition(f'{results["object"]}.csv', primary_key=['Id'],
+            #                                        incremental=incremental)
+            # with open(result["result"], 'r') as _input, open(tdf.full_path, 'w+', newline='') as out:
+            #     reader = csv.DictReader(_input)
+            #     writer = csv.DictWriter(out, fieldnames=reader.fieldnames, lineterminator='\n', delimiter=',')
+            #     for row in reader:
+            #         writer.writerow(row)
+
+            # REVIEW: imho unicodecsv dependency is not needed - this was workaround for Python 2.x
             reader = unicodecsv.DictReader(result, encoding='utf-8')
+            # REVIEW: this should be part of the Writer object
             first_row = next(reader, None)
             if first_row:
                 tdf = self.create_out_table_definition(f'{results["object"]}.csv', primary_key=['Id'],
                                                        incremental=incremental)
                 with Writer(tdf) as wrt:
                     tdf.columns = list(first_row.keys())
+                    # REVIEW: why is this not part of  the Writer class constructor
                     wrt.create_writer(tdf.columns, headerless=True)
                     wrt.write_first_row(first_row)
                     wrt.write_results_with_reader(reader)
@@ -87,6 +105,7 @@ class Component(ComponentBase):
 
     @staticmethod
     @retry(tries=3, delay=5)
+    # REVIEW: this is something that might be part of the client as well
     def run_query(salesforce_client, soql_query):
         job = salesforce_client.create_queryall_job(soql_query.sf_object, contentType='CSV')
         batch = salesforce_client.query(job, soql_query.query)
@@ -100,6 +119,7 @@ class Component(ComponentBase):
         batch_result = salesforce_client.get_all_results_for_query_batch(batch)
         return {"object": soql_query.sf_object, "result": batch_result}
 
+    # REVIEW: get/build_soql_query should be atomic -> it would preveny enumeration of queries.
     def get_soql_queries(self, salesforce_client, params, last_state):
         salesforce_object = params.get(KEY_OBJECTS)
         soql_query_string = params.get(KEY_SOQL_QUERY)
@@ -107,6 +127,7 @@ class Component(ComponentBase):
         incremental_field = params.get(KEY_INCREMENTAL_FIELD, "LastModifiedDate")
         is_deleted = params.get(KEY_IS_DELETED, False)
 
+        # REVIEW: what if the salesforce_object is emtpy/invalid?
         if soql_query_string:
             soql_queries = self.get_soql_queries_from_queries(salesforce_client, [soql_query_string])
         else:
@@ -122,6 +143,7 @@ class Component(ComponentBase):
         return soql_queries
 
     @staticmethod
+    # REVIEW: This could be part of the client and atomic (e.g. build_query_from_string)
     def get_soql_queries_from_queries(salesforce_client, soql_query_strings):
         soql_queries = []
         for query in soql_query_strings:
@@ -132,6 +154,7 @@ class Component(ComponentBase):
         return soql_queries
 
     @staticmethod
+    # REVIEW: This could be part of the client and atomic (single query). e.g. build_soql_query_from_object_name
     def get_soql_queries_from_objects(salesforce_client, sf_object):
         soql_queries = []
         sf_objects = sf_object.split(",")

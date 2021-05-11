@@ -8,7 +8,8 @@ class QueryType(Enum):
 
 class SoqlQuery:
     def __init__(self, query=None, sf_object=None, sf_object_fields=None, query_type="get"):
-        self.sf_object_fields = sf_object_fields
+        if sf_object_fields:
+            self.sf_object_fields = self.list_to_lower(sf_object_fields)
         self.sf_object = sf_object if sf_object else self.get_object_from_query(query)
         self.query = query if query else self.construct_soql_from_fields()
         self.query_type = QueryType(query_type)

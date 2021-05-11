@@ -1,37 +1,17 @@
-# REVIEW: This along with the soql_query.py could be in a separate package salesforce_client/client.py or something like this.
-# to keep the related modules together. See https://bitbucket.org/kds_consulting_team/kds-team.ex-customer-io/src/master/src/ for instance/
-
 import logging
+from retry import retry
+from time import sleep
 from salesforce_bulk import SalesforceBulk
+from salesforce_bulk.salesforce_bulk import BulkBatchFailed
 from simple_salesforce import SFType
 from simple_salesforce.exceptions import SalesforceResourceNotFound
+
+from salesforce.soql_query import SoqlQuery
 
 DEFAULT_API_VERSION = "40.0"
 
 NON_SUPPORTED_BULK_FIELD_TYPES = ["address", "location", "base64", "reference"]
 
-# REVIEW: the subclass does not call the super constructor. There is no need to copy paste the code. Could be reduced to:
-#
-# import logging
-#
-# from salesforce_bulk import SalesforceBulk
-# from salesforce_bulk.salesforce_bulk import DEFAULT_API_VERSION
-# from simple_salesforce import SFType
-# from simple_salesforce.exceptions import SalesforceResourceNotFound
-#
-# NON_SUPPORTED_BULK_FIELD_TYPES = ["address", "location", "base64", "reference"]
-#
-#
-# class SalesforceClient(SalesforceBulk):
-#     # copied from SalesforceBulk lib except host is saved for describe object
-#     def __init__(self, sessionId=None, host=None, username=None, password=None,
-#                  API_version=DEFAULT_API_VERSION, sandbox=False,
-#                  security_token=None, organizationId=None, client_id=None, domain=None):
-#         super().__init__(sessionId, host, username, password,
-#                          API_version, sandbox,
-#                          security_token, organizationId, client_id, domain)
-#
-#         self.host = host
 
 class SalesforceClient(SalesforceBulk):
     # copied from SalesforceBulk lib except host is saved for describe object
@@ -69,6 +49,7 @@ class SalesforceClient(SalesforceBulk):
             field_names = [field['name'] for field in object_desc['fields'] if self.is_bulk_supported_field(field)]
         except SalesforceResourceNotFound:
             logging.exception(f"Object type {sf_object} does not exist in Salesforce, enter a valid object")
+            raise
         return field_names
 
     @staticmethod
@@ -76,3 +57,29 @@ class SalesforceClient(SalesforceBulk):
         if field["type"] in NON_SUPPORTED_BULK_FIELD_TYPES:
             return False
         return True
+
+    @retry(tries=3, delay=5)
+    def run_query(self, soql_query):
+        job = self.create_queryall_job(soql_query.sf_object, contentType='CSV')
+        batch = self.query(job, soql_query.query)
+        self.close_job(job)
+        logging.info(f"Running SOQL : {soql_query.query}")
+        try:
+            while not self.is_batch_done(batch):
+                sleep(10)
+        except BulkBatchFailed as batch_fail:
+            logging.exception(batch_fail.state_message)
+        batch_result = self.get_all_results_for_query_batch(batch)
+        return {"object": soql_query.sf_object, "result": batch_result}
+
+    def build_query_from_string(self, soql_query_string):
+        soql_query = SoqlQuery(query=soql_query_string)
+        object_fields = self.describe_object(soql_query.sf_object)
+        soql_query.set_sf_object_fields(object_fields)
+        return soql_query
+
+    def build_soql_query_from_object_name(self, sf_object):
+        sf_object = sf_object.strip()
+        object_fields = self.describe_object(sf_object)
+        soql_query = SoqlQuery(sf_object_fields=object_fields, sf_object=sf_object)
+        return soql_query

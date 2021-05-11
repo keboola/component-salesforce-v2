@@ -17,7 +17,7 @@
       "type": "string",
       "options": {
         "dependencies": {
-          "fieldOne": "Object"
+          "query_type_selector": "Object"
         }
       },
       "description": "Salesforce object identifier, eg. Contact",
@@ -28,7 +28,7 @@
       "type": "string",
       "options": {
         "dependencies": {
-          "fieldOne": "Custom SOQL"
+          "query_type_selector": "Custom SOQL"
         }
       },
       "description": "Specify the SOQL query, eg. SELECT Id, FirstName, LastName FROM Contact",
@@ -58,26 +58,29 @@
           "propertyOrder": 300,
           "options": {
             "dependencies": {
-              "incremental": 1
+              "incremental": true,
+              "incremental_fetch": true
             }
           }
         },
-        "primary_key": {
-          "type": "string",
-          "title": "Primary Key",
-          "default": "Id",
-          "propertyOrder": 400,
+        "incremental_fetch": {
+      "title": "Incremental fetching",
+      "type": "boolean",
+      "format": "checkbox",
+      "default": false,
+      "description": "Fetch records that have been updated since the last run of the component with a specified field",
+      "propertyOrder": 250,
           "options": {
             "dependencies": {
-              "incremental": 1
+              "incremental": true
             }
           }
-        },
+    },
         "incremental": {
-          "type": "number",
+          "type": "boolean",
           "enum": [
-            0,
-            1
+            true,
+            false
           ],
           "options": {
             "enum_titles": [
@@ -85,7 +88,7 @@
               "Incremental Update"
             ]
           },
-          "default": 0,
+          "default": false,
           "title": "Load type",
           "description": "If set to Incremental update, the result tables will be updated based on primary key and new records will be fetched. Full load overwrites the destination table each time.",
           "propertyOrder": 200

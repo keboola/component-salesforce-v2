@@ -1,1 +1,99 @@
-{}
+{
+  "title": "Query Configuration",
+  "type": "object",
+  "properties": {
+    "query_type_selector": {
+      "title": "Query type",
+      "type": "string",
+      "enum": [
+        "Object",
+        "Custom SOQL"
+      ],
+      "default": "select",
+      "propertyOrder": 1
+    },
+    "objects": {
+      "title": "Object Name",
+      "type": "string",
+      "options": {
+        "dependencies": {
+          "query_type_selector": "Object"
+        }
+      },
+      "description": "Salesforce object identifier, eg. Contact",
+      "propertyOrder": 2
+    },
+    "soql_query": {
+      "title": "SOQL Query",
+      "type": "string",
+      "options": {
+        "dependencies": {
+          "query_type_selector": "Custom SOQL"
+        }
+      },
+      "description": "Specify the SOQL query, eg. SELECT Id, FirstName, LastName FROM Contact",
+      "propertyOrder": 3
+    },
+    "is_deleted": {
+      "title": "Get deleted records",
+      "type": "boolean",
+      "format": "checkbox",
+      "default": true,
+      "description": "Fetch records that have been deleted",
+      "propertyOrder": 4
+    },
+    "loading_options": {
+      "type": "object",
+      "title": "Loading Options",
+      "propertyOrder": 100,
+      "required": [
+        "incremental"
+      ],
+      "properties": {
+        "incremental_field": {
+          "type": "string",
+          "title": "Incremental Field",
+          "default": "LastModifiedDate",
+          "description": "Salesforce object field to use for incremental fetching, eg. LastModifiedDate for most Salesforce objects or CreatedDate for Salesforce History objects",
+          "propertyOrder": 300,
+          "options": {
+            "dependencies": {
+              "incremental": true,
+              "incremental_fetch": true
+            }
+          }
+        },
+        "incremental_fetch": {
+      "title": "Incremental fetching",
+      "type": "boolean",
+      "format": "checkbox",
+      "default": false,
+      "description": "Fetch records that have been updated since the last run of the component with a specified field",
+      "propertyOrder": 250,
+          "options": {
+            "dependencies": {
+              "incremental": true
+            }
+          }
+    },
+        "incremental": {
+          "type": "boolean",
+          "enum": [
+            true,
+            false
+          ],
+          "options": {
+            "enum_titles": [
+              "Full Load",
+              "Incremental Update"
+            ]
+          },
+          "default": false,
+          "title": "Load type",
+          "description": "If set to Incremental update, the result tables will be updated based on primary key and new records will be fetched. Full load overwrites the destination table each time.",
+          "propertyOrder": 200
+        }
+      }
+    }
+  }
+}

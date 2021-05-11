@@ -1,17 +1,47 @@
 {
   "type": "object",
-  "title": "extractor configuration",
+  "title": "Salesforce Credentials",
+  "format": "table",
+  "$schema": "http://json-schema.org/draft-04/schema#",
   "required": [
-    "print_hello"
+    "loginname",
+    "#password",
+    "#securitytoken",
+    "sandbox"
   ],
   "properties": {
-    "print_hello": {
-      "type": "boolean",
-      "title": "Print Hello"
+        "loginname": {
+      "type": "string",
+      "title": "Login Name",
+      "default": "",
+      "minLength": 1,
+      "description": "Login name for Salesforce",
+      "propertyOrder": 10
     },
-    "debug": {
+    "#password": {
+      "type": "string",
+      "title": "Password",
+      "format": "password",
+      "default": "",
+      "minLength": 1,
+      "description": "Salesforce password",
+      "propertyOrder": 20
+    },
+    "#securitytoken": {
+      "type": "string",
+      "title": "Security token",
+      "format": "password",
+      "default": "",
+      "minLength": 1,
+      "description": "Salesforce security token",
+      "propertyOrder": 30
+    },
+        "sandbox": {
       "type": "boolean",
-      "title": "Debug"
+      "title": "Sandbox",
+      "format": "checkbox",
+      "description": "Download records from sandbox instead of the production environment.",
+      "propertyOrder": 40
     }
   }
 }

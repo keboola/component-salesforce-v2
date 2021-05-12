@@ -69,8 +69,8 @@ class Component(ComponentBase):
         sf_object = result["object"]
         try:
             result = next(result["result"])
-        except BulkBatchFailed as bulk_exception:
-            raise UserException(f"Invalid Query: Failed to process query. Check syntax, objects, and fields") from None
+        except BulkBatchFailed:
+            raise UserException("Invalid Query: Failed to process query. Check syntax, objects, and fields")
         return result, sf_object
 
     def write_results(self, result, sf_object, incremental):

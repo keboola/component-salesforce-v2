@@ -74,9 +74,13 @@ class Component(ComponentBase):
         return result, sf_object
 
     def write_results(self, result, sf_object, incremental):
-        tdf = self.create_out_table_definition(f'{sf_object}.csv',
-                                               primary_key=['Id'],
-                                               incremental=incremental)
+        if incremental:
+            tdf = self.create_out_table_definition(f'{sf_object}.csv',
+                                                   primary_key=['Id'],
+                                                   incremental=incremental)
+        else:
+            tdf = self.create_out_table_definition(f'{sf_object}.csv',
+                                                   incremental=False)
 
         with open(tdf.full_path, 'w+', newline='') as out:
             reader = unicodecsv.DictReader(result)

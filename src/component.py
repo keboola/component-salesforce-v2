@@ -27,7 +27,7 @@ KEY_IS_DELETED = "is_deleted"
 
 # list of mandatory parameters => if some is missing,
 # component will fail with readable message on initialization.
-REQUIRED_PARAMETERS = [KEY_USERNAME, KEY_PASSWORD, KEY_SECURITY_TOKEN, [KEY_SOQL_QUERY, KEY_OBJECT]]
+REQUIRED_PARAMETERS = [KEY_USERNAME, KEY_PASSWORD, KEY_SECURITY_TOKEN]
 REQUIRED_IMAGE_PARS = []
 
 APP_VERSION = '0.0.1'

@@ -4,7 +4,6 @@ from time import sleep
 from salesforce_bulk import SalesforceBulk
 from salesforce_bulk.salesforce_bulk import BulkBatchFailed
 from simple_salesforce import SFType
-from simple_salesforce.exceptions import SalesforceResourceNotFound
 
 from salesforce.soql_query import SoqlQuery
 

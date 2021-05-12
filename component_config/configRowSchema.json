@@ -79,8 +79,8 @@
         "incremental": {
           "type": "boolean",
           "enum": [
-            true,
-            false
+            false,
+            true
           ],
           "options": {
             "enum_titles": [

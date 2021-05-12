@@ -91,14 +91,14 @@ class Component(ComponentBase):
         incremental_fetching = params.get(KEY_INCREMENTAL_FETCH)
         is_deleted = params.get(KEY_IS_DELETED, False)
 
-        if soql_query_string:
-            soql_query = salesforce_client.build_query_from_string(soql_query_string)
-        elif salesforce_object:
-            try:
+        try:
+            if soql_query_string:
+                soql_query = salesforce_client.build_query_from_string(soql_query_string)
+            elif salesforce_object:
                 soql_query = salesforce_client.build_soql_query_from_object_name(salesforce_object)
-            except SalesforceResourceNotFound:
-                raise UserException(f"Object type {salesforce_object} does not exist in Salesforce, "
-                                    f"enter a valid object")
+        except SalesforceResourceNotFound:
+            raise UserException(f"Object type {salesforce_object} does not exist in Salesforce, "
+                                f"enter a valid object")
 
         if incremental and incremental_fetching and last_state:
             soql_query.set_query_to_incremental(incremental_field, last_state)

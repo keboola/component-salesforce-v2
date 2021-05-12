@@ -43,13 +43,9 @@ class SalesforceClient(SalesforceBulk):
 
     def describe_object(self, sf_object):
         salesforce_type = SFType(sf_object, self.sessionId, self.host)
-        field_names = []
-        try:
-            object_desc = salesforce_type.describe()
-            field_names = [field['name'] for field in object_desc['fields'] if self.is_bulk_supported_field(field)]
-        except SalesforceResourceNotFound:
-            logging.exception(f"Object type {sf_object} does not exist in Salesforce, enter a valid object")
-            raise
+        object_desc = salesforce_type.describe()
+        field_names = [field['name'] for field in object_desc['fields'] if self.is_bulk_supported_field(field)]
+
         return field_names
 
     @staticmethod

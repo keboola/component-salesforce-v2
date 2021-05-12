@@ -12,6 +12,7 @@ from salesforce.client import SalesforceClient
 from simple_salesforce.exceptions import SalesforceAuthenticationFailed
 from simple_salesforce.exceptions import SalesforceResourceNotFound
 from keboola.component.base import ComponentBase, UserException
+from salesforce_bulk.salesforce_bulk import BulkBatchFailed
 
 # configuration variables
 KEY_USERNAME = "username"
@@ -51,8 +52,13 @@ class Component(ComponentBase):
         soql_query = self.build_soql_query(salesforce_client, params, last_run)
 
         results = salesforce_client.run_query(soql_query)
+        try:
+            sf_object = results["object"]
+            result = next(results["result"])
+        except BulkBatchFailed as bulk_exception:
+            raise UserException(f"Invalid Query: {bulk_exception}")
 
-        self.write_results(results, params.get(KEY_INCREMENTAL, False))
+        self.write_results(result, sf_object, params.get(KEY_INCREMENTAL, False))
 
         soql_timestamp = str(datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S.000Z'))
         self.write_state_file({"last_run": soql_timestamp})
@@ -64,19 +70,18 @@ class Component(ComponentBase):
                                 security_token=params.get(KEY_SECURITY_TOKEN),
                                 sandbox=params.get(KEY_SANDBOX))
 
-    def write_results(self, results, incremental):
-        for result in results["result"]:
-            tdf = self.create_out_table_definition(f'{results["object"]}.csv',
-                                                   primary_key=['Id'],
-                                                   incremental=incremental)
+    def write_results(self, result, sf_object, incremental):
+        tdf = self.create_out_table_definition(f'{sf_object}.csv',
+                                               primary_key=['Id'],
+                                               incremental=incremental)
 
-            with open(tdf.full_path, 'w+', newline='') as out:
-                reader = unicodecsv.DictReader(result)
-                tdf.columns = list(reader.fieldnames)
-                writer = csv.DictWriter(out, fieldnames=reader.fieldnames, lineterminator='\n', delimiter=',')
-                for row in reader:
-                    writer.writerow(row)
-            self.write_tabledef_manifest(tdf)
+        with open(tdf.full_path, 'w+', newline='') as out:
+            reader = unicodecsv.DictReader(result)
+            tdf.columns = list(reader.fieldnames)
+            writer = csv.DictWriter(out, fieldnames=reader.fieldnames, lineterminator='\n', delimiter=',')
+            for row in reader:
+                writer.writerow(row)
+        self.write_tabledef_manifest(tdf)
 
     def build_soql_query(self, salesforce_client, params, last_state):
         salesforce_object = params.get(KEY_OBJECT)

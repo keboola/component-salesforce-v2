@@ -4,13 +4,12 @@
   "format": "table",
   "$schema": "http://json-schema.org/draft-04/schema#",
   "required": [
-    "loginname",
+    "username",
     "#password",
-    "#securitytoken",
-    "sandbox"
+    "#security_token"
   ],
   "properties": {
-        "loginname": {
+        "username": {
       "type": "string",
       "title": "Login Name",
       "default": "",
@@ -27,7 +26,7 @@
       "description": "Salesforce password",
       "propertyOrder": 20
     },
-    "#securitytoken": {
+    "#security_token": {
       "type": "string",
       "title": "Security token",
       "format": "password",

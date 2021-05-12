@@ -51,13 +51,7 @@ class Component(ComponentBase):
 
         soql_query = self.build_soql_query(salesforce_client, params, last_run)
 
-        results = salesforce_client.run_query(soql_query)
-        try:
-            sf_object = results["object"]
-            result = next(results["result"])
-        except BulkBatchFailed as bulk_exception:
-            raise UserException(f"Invalid Query: {bulk_exception}")
-
+        result, sf_object = self.fetch_result(salesforce_client, soql_query)
         self.write_results(result, sf_object, params.get(KEY_INCREMENTAL, False))
 
         soql_timestamp = str(datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S.000Z'))
@@ -69,6 +63,15 @@ class Component(ComponentBase):
                                 password=params.get(KEY_PASSWORD),
                                 security_token=params.get(KEY_SECURITY_TOKEN),
                                 sandbox=params.get(KEY_SANDBOX))
+
+    def fetch_result(self, salesforce_client, soql_query):
+        result = salesforce_client.run_query(soql_query)
+        sf_object = result["object"]
+        try:
+            result = next(result["result"])
+        except BulkBatchFailed as bulk_exception:
+            raise UserException(f"Invalid Query: Failed to process query. Check syntax, objects, and fields") from None
+        return result, sf_object
 
     def write_results(self, result, sf_object, incremental):
         tdf = self.create_out_table_definition(f'{sf_object}.csv',

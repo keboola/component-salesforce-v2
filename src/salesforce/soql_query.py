@@ -34,8 +34,11 @@ class SoqlQuery:
         word_list = query_no_brackets.lower().split()
         # Only 1 from should exist
         from_index = word_list.index("from")
-        # return object name which is 1 word after the "from"
-        return word_list[from_index + 1]
+        #  object name is 1 word after the "from"
+        object_name = word_list[from_index + 1]
+        # remove non alphanumeric from objectname
+        object_name = re.sub(r'\W+', '', object_name)
+        return object_name
 
     def check_query(self):
         if not isinstance(self.query, str):

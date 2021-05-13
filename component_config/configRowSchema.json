@@ -12,7 +12,7 @@
       "default": "select",
       "propertyOrder": 1
     },
-    "object": {
+    "objects": {
       "title": "Object Name",
       "type": "string",
       "options": {

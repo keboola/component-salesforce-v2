@@ -109,8 +109,8 @@ class Component(ComponentBase):
 
         if incremental and incremental_fetching and last_state:
             soql_query.set_query_to_incremental(incremental_field, last_state)
-        if not is_deleted:
-            soql_query.remove_deleted_from_query()
+
+        soql_query.set_deleted_option_in_query(is_deleted)
 
         return soql_query
 

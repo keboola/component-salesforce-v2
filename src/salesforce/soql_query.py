@@ -1,5 +1,6 @@
 from enum import Enum
 import re
+import logging
 
 
 class QueryType(Enum):
@@ -57,9 +58,13 @@ class SoqlQuery:
 
         self.query = self._add_to_where_clause(self.query, incremental_string)
 
-    def remove_deleted_from_query(self):
-        is_deleted_string = " WHERE IsDeleted = false "
-        self.query = self._add_to_where_clause(self.query, is_deleted_string)
+    def set_deleted_option_in_query(self, deleted):
+        if not deleted and "isdeleted" in self.sf_object_fields:
+            is_deleted_string = " WHERE IsDeleted = false "
+            self.query = self._add_to_where_clause(self.query, is_deleted_string)
+        elif deleted and "isdeleted" not in self.sf_object_fields:
+            logging.warning(f"Waring: IsDeleted is not a field in the {self.sf_object} object, cannot fetch deleted "
+                            f"records")
 
     @staticmethod
     def _add_to_where_clause(soql, new_where_string):

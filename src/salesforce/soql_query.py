@@ -76,3 +76,12 @@ class SoqlQuery:
         else:
             new_query = "".join([soql, new_where_string])
         return new_query
+
+    def check_pkey_in_query(self, pkeys):
+        # split a string by space, comma, and period characters
+        missing_keys = []
+        query_words = re.split("\\s|(?<!\\d)[,.](?!\\d)", self.query.lower())
+        for pkey in pkeys:
+            if pkey.lower() not in query_words:
+                missing_keys.append(pkey)
+        return missing_keys

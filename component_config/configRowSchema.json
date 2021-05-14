@@ -61,7 +61,7 @@
           "propertyOrder": 300,
           "options": {
             "dependencies": {
-              "incremental": true,
+              "incremental": 1,
               "incremental_fetch": true
             }
           }

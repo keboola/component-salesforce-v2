@@ -33,8 +33,6 @@ KEY_PRIVATE_KEY = "pkey"
 REQUIRED_PARAMETERS = [KEY_USERNAME, KEY_PASSWORD, KEY_SECURITY_TOKEN, [KEY_SOQL_QUERY, KEY_OBJECT]]
 REQUIRED_IMAGE_PARS = []
 
-APP_VERSION = '0.0.1'
-
 
 class Component(ComponentBase):
     def __init__(self):
@@ -45,7 +43,7 @@ class Component(ComponentBase):
         params = self.configuration.parameters
 
         last_run = self.get_state_file().get("last_run")
-        pkey = params.get(KEY_PRIVATE_KEY)
+        pkeys = params.get(KEY_PRIVATE_KEY)
         incremental = params.get(KEY_INCREMENTAL, False)
 
         try:
@@ -55,8 +53,13 @@ class Component(ComponentBase):
 
         soql_query = self.build_soql_query(salesforce_client, params, last_run)
 
+        missing_keys = soql_query.check_pkey_in_query(pkeys)
+        if missing_keys != []:
+            raise UserException(f"Private Keys {missing_keys} not in query, Add to SOQL query or check that it exists"
+                                f" in the Salesforce object.")
+
         table = self.create_out_table_definition(f'{soql_query.sf_object}.csv',
-                                                 primary_key=pkey,
+                                                 primary_key=pkeys,
                                                  incremental=incremental,
                                                  is_sliced=True)
 
@@ -78,6 +81,7 @@ class Component(ComponentBase):
                                 sandbox=params.get(KEY_SANDBOX))
 
     def create_sliced_directory(self, file_name):
+        logging.info("Creating sliced file")
         tables_out_path = self.tables_out_path
         table_name = "".join([file_name, ".csv"])
         sliced_directory = path.join(tables_out_path, table_name)

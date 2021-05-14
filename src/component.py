@@ -22,11 +22,13 @@ KEY_SECURITY_TOKEN = "#security_token"
 KEY_SANDBOX = "sandbox"
 KEY_OBJECT = "object"
 KEY_SOQL_QUERY = "soql_query"
-KEY_INCREMENTAL = "incremental"
-KEY_INCREMENTAL_FIELD = "incremental_field"
-KEY_INCREMENTAL_FETCH = "incremental_fetching"
 KEY_IS_DELETED = "is_deleted"
-KEY_PRIVATE_KEY = "pkeys"
+
+KEY_LOADING_OPTIONS = "loading_options"
+KEY_LOADING_OPTIONS_INCREMENTAL = "incremental"
+KEY_LOADING_OPTIONS_INCREMENTAL_FIELD = "incremental_field"
+KEY_LOADING_OPTIONS_INCREMENTAL_FETCH = "incremental_fetching"
+KEY_LOADING_OPTIONS_PKEY = "pkeys"
 
 # list of mandatory parameters => if some is missing,
 # component will fail with readable message on initialization.
@@ -41,10 +43,12 @@ class Component(ComponentBase):
 
     def run(self):
         params = self.configuration.parameters
+        loading_options = params.get(KEY_LOADING_OPTIONS, {})
 
         last_run = self.get_state_file().get("last_run")
-        pkeys = params.get(KEY_PRIVATE_KEY)
-        incremental = params.get(KEY_INCREMENTAL, False)
+
+        pkeys = loading_options.get(KEY_LOADING_OPTIONS_PKEY, [])
+        incremental = loading_options.get(KEY_LOADING_OPTIONS_INCREMENTAL, False)
 
         try:
             salesforce_client = self.login_to_salesforce(params)
@@ -108,11 +112,12 @@ class Component(ComponentBase):
                 writer.writerow(row)
 
     def build_soql_query(self, salesforce_client, params, last_state):
+        loading_options = params.get(KEY_LOADING_OPTIONS, {})
         salesforce_object = params.get(KEY_OBJECT)
         soql_query_string = params.get(KEY_SOQL_QUERY)
-        incremental = params.get(KEY_INCREMENTAL, False)
-        incremental_field = params.get(KEY_INCREMENTAL_FIELD, "LastModifiedDate")
-        incremental_fetching = params.get(KEY_INCREMENTAL_FETCH)
+        incremental = loading_options.get(KEY_LOADING_OPTIONS_INCREMENTAL, False)
+        incremental_field = loading_options.get(KEY_LOADING_OPTIONS_INCREMENTAL_FIELD, "LastModifiedDate")
+        incremental_fetching = loading_options.get(KEY_LOADING_OPTIONS_INCREMENTAL_FETCH)
         is_deleted = params.get(KEY_IS_DELETED, False)
 
         try:

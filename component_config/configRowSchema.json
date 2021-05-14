@@ -1,6 +1,9 @@
 {
   "title": "Query Configuration",
   "type": "object",
+  "required": [
+    "query_type_selector"
+  ],
   "properties": {
     "query_type_selector": {
       "title": "Query type",
@@ -9,10 +12,10 @@
         "Object",
         "Custom SOQL"
       ],
-      "default": "select",
+      "default": "Object",
       "propertyOrder": 1
     },
-    "objects": {
+    "object": {
       "title": "Object Name",
       "type": "string",
       "options": {
@@ -38,7 +41,7 @@
       "title": "Get deleted records",
       "type": "boolean",
       "format": "checkbox",
-      "default": true,
+      "default": false,
       "description": "Fetch records that have been deleted",
       "propertyOrder": 4
     },
@@ -63,24 +66,36 @@
             }
           }
         },
+        "pkey": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "title": "Primary key column"
+          },
+          "default": [
+            "Id"
+          ],
+          "title": "Primary key",
+          "propertyOrder": 5000
+        },
         "incremental_fetch": {
-      "title": "Incremental fetching",
-      "type": "boolean",
-      "format": "checkbox",
-      "default": false,
-      "description": "Fetch records that have been updated since the last run of the component with a specified field",
-      "propertyOrder": 250,
+          "title": "Incremental fetching",
+          "type": "boolean",
+          "format": "checkbox",
+          "default": false,
+          "description": "Fetch records that have been updated since the last run of the component with a specified field",
+          "propertyOrder": 250,
           "options": {
             "dependencies": {
-              "incremental": true
+              "incremental": 1
             }
           }
-    },
+        },
         "incremental": {
-          "type": "boolean",
+          "type": "integer",
           "enum": [
-            false,
-            true
+            0,
+            1
           ],
           "options": {
             "enum_titles": [
@@ -88,7 +103,7 @@
               "Incremental Update"
             ]
           },
-          "default": false,
+          "default": 0,
           "title": "Load type",
           "description": "If set to Incremental update, the result tables will be updated based on primary key and new records will be fetched. Full load overwrites the destination table each time.",
           "propertyOrder": 200

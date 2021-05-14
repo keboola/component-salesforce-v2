@@ -26,7 +26,7 @@ KEY_INCREMENTAL = "incremental"
 KEY_INCREMENTAL_FIELD = "incremental_field"
 KEY_INCREMENTAL_FETCH = "incremental_fetching"
 KEY_IS_DELETED = "is_deleted"
-KEY_PRIVATE_KEY = "pkey"
+KEY_PRIVATE_KEY = "pkeys"
 
 # list of mandatory parameters => if some is missing,
 # component will fail with readable message on initialization.
@@ -57,6 +57,7 @@ class Component(ComponentBase):
         if missing_keys != []:
             raise UserException(f"Private Keys {missing_keys} not in query, Add to SOQL query or check that it exists"
                                 f" in the Salesforce object.")
+        logging.info(f"Primary key : {pkeys} set")
 
         table = self.create_out_table_definition(f'{soql_query.sf_object}.csv',
                                                  primary_key=pkeys,

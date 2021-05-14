@@ -50,9 +50,9 @@ class SoqlQuery:
             if "from" not in self.query.lower():
                 raise ValueError("SOQL query must contain FROM")
 
-    def set_query_to_incremental(self, incremental_field, last_state):
+    def set_query_to_incremental(self, incremental_field, continue_from_value):
         if incremental_field.lower() in self.sf_object_fields:
-            incremental_string = f" WHERE {incremental_field} >= {last_state}"
+            incremental_string = f" WHERE {incremental_field} >= {continue_from_value}"
         else:
             raise ValueError(f"Field {incremental_field} is not present in the {self.sf_object} object ")
 
@@ -76,3 +76,12 @@ class SoqlQuery:
         else:
             new_query = "".join([soql, new_where_string])
         return new_query
+
+    def check_pkey_in_query(self, pkeys):
+        missing_keys = []
+        # split a string by space, comma, and period characters
+        query_words = re.split("\\s|(?<!\\d)[,.](?!\\d)", self.query.lower())
+        for pkey in pkeys:
+            if pkey.lower() not in query_words:
+                missing_keys.append(pkey)
+        return missing_keys

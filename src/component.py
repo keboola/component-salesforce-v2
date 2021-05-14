@@ -28,7 +28,7 @@ KEY_LOADING_OPTIONS = "loading_options"
 KEY_LOADING_OPTIONS_INCREMENTAL = "incremental"
 KEY_LOADING_OPTIONS_INCREMENTAL_FIELD = "incremental_field"
 KEY_LOADING_OPTIONS_INCREMENTAL_FETCH = "incremental_fetching"
-KEY_LOADING_OPTIONS_PKEY = "pkeys"
+KEY_LOADING_OPTIONS_PKEY = "pkey"
 
 # list of mandatory parameters => if some is missing,
 # component will fail with readable message on initialization.
@@ -47,7 +47,7 @@ class Component(ComponentBase):
 
         last_run = self.get_state_file().get("last_run")
 
-        pkeys = loading_options.get(KEY_LOADING_OPTIONS_PKEY, [])
+        pkey = loading_options.get(KEY_LOADING_OPTIONS_PKEY, [])
         incremental = loading_options.get(KEY_LOADING_OPTIONS_INCREMENTAL, False)
 
         try:
@@ -57,14 +57,14 @@ class Component(ComponentBase):
 
         soql_query = self.build_soql_query(salesforce_client, params, last_run)
 
-        missing_keys = soql_query.check_pkey_in_query(pkeys)
+        missing_keys = soql_query.check_pkey_in_query(pkey)
         if missing_keys != []:
             raise UserException(f"Private Keys {missing_keys} not in query, Add to SOQL query or check that it exists"
                                 f" in the Salesforce object.")
-        logging.info(f"Primary key : {pkeys} set")
+        logging.info(f"Primary key : {pkey} set")
 
         table = self.create_out_table_definition(f'{soql_query.sf_object}.csv',
-                                                 primary_key=pkeys,
+                                                 primary_key=pkey,
                                                  incremental=incremental,
                                                  is_sliced=True)
 

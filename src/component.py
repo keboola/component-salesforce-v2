@@ -31,6 +31,8 @@ KEY_LOADING_OPTIONS_INCREMENTAL_FIELD = "incremental_field"
 KEY_LOADING_OPTIONS_INCREMENTAL_FETCH = "incremental_fetch"
 KEY_LOADING_OPTIONS_PKEY = "pkey"
 
+RECORDS_NOT_FOUND = ['Records not found for this query']
+
 # list of mandatory parameters => if some is missing,
 # component will fail with readable message on initialization.
 REQUIRED_PARAMETERS = [KEY_USERNAME, KEY_PASSWORD, KEY_SECURITY_TOKEN, [KEY_SOQL_QUERY, KEY_OBJECT]]
@@ -108,10 +110,13 @@ class Component(ComponentBase):
         slice_path = path.join(table.full_path, str(index))
         with open(slice_path, 'w+', newline='') as out:
             reader = unicodecsv.DictReader(result)
-            table.columns = list(reader.fieldnames)
-            writer = csv.DictWriter(out, fieldnames=reader.fieldnames, lineterminator='\n', delimiter=',')
-            for row in reader:
-                writer.writerow(row)
+            if reader.fieldnames != RECORDS_NOT_FOUND:
+                table.columns = list(reader.fieldnames)
+                writer = csv.DictWriter(out, fieldnames=reader.fieldnames, lineterminator='\n', delimiter=',')
+                for row in reader:
+                    writer.writerow(row)
+            else:
+                logging.info("No records found using SOQL query")
 
     def build_soql_query(self, salesforce_client, params, continue_from_value):
         loading_options = params.get(KEY_LOADING_OPTIONS, {})

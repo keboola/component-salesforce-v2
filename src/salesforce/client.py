@@ -69,12 +69,12 @@ class SalesforceClient(SalesforceBulk):
 
     def build_query_from_string(self, soql_query_string):
         soql_query = SoqlQuery(query=soql_query_string)
-        object_fields = self.describe_object(soql_query.sf_object)
-        soql_query.sf_object_fields = object_fields
+        soql_query.field_names = SoqlQuery.get_fields_from_query(soql_query_string)
+        soql_query.sf_object_fields = self.describe_object(soql_query.sf_object)
         return soql_query
 
     def build_soql_query_from_object_name(self, sf_object):
         sf_object = sf_object.strip()
         object_fields = self.describe_object(sf_object)
-        soql_query = SoqlQuery(sf_object_fields=object_fields, sf_object=sf_object)
+        soql_query = SoqlQuery(sf_object_fields=object_fields, sf_object=sf_object, field_names=object_fields)
         return soql_query

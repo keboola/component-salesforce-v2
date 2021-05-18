@@ -74,6 +74,7 @@ class Component(ComponentBase):
                                                  primary_key=pkey,
                                                  incremental=incremental,
                                                  is_sliced=True)
+        table.columns = soql_query.field_names
 
         self.create_sliced_directory(table.full_path)
 
@@ -106,12 +107,12 @@ class Component(ComponentBase):
         except BulkBatchFailed:
             raise UserException("Invalid Query: Failed to process query. Check syntax, objects, and fields")
 
-    def write_results(self, result, table, index):
+    @staticmethod
+    def write_results(result, table, index):
         slice_path = path.join(table.full_path, str(index))
         with open(slice_path, 'w+', newline='') as out:
             reader = unicodecsv.DictReader(result)
             if reader.fieldnames != RECORDS_NOT_FOUND:
-                table.columns = list(reader.fieldnames)
                 writer = csv.DictWriter(out, fieldnames=reader.fieldnames, lineterminator='\n', delimiter=',')
                 for row in reader:
                     writer.writerow(row)

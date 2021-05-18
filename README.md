@@ -38,16 +38,21 @@ the component. This is done by specifying an incremental field in the object tha
 ```json
 {
   "parameters": {
-    "username": "fakeuser@fakemail.com",
+    "username": "user@keboola.com",
     "#password": "password",
-    "#security_token": "token",
-    "sandbox" : false,
-    "object" : "",
-    "soql_query" : "select Id,FirstName,LastName,isdeleted,lastmodifieddate from Contact",
-    "is_deleted" : false,
-    "incremental" : true,
-    "incremental_field" : "lastmodifieddate",
-    "incremental_fetching" : true
+    "#security_token": "token_here",
+    "sandbox": false,
+    "object": "Contact",
+    "soql_query": "select Id, FirstName,LastName,isdeleted,lastmodifieddate from Contact",
+    "is_deleted": false,
+    "loading_options": {
+      "incremental": true,
+      "pkey": [
+        "Id"
+      ],
+      "incremental_field": "lastmodifieddate",
+      "incremental_fetch": true
+    }
   }
 }
 ```

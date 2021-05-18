@@ -28,7 +28,7 @@ KEY_IS_DELETED = "is_deleted"
 KEY_LOADING_OPTIONS = "loading_options"
 KEY_LOADING_OPTIONS_INCREMENTAL = "incremental"
 KEY_LOADING_OPTIONS_INCREMENTAL_FIELD = "incremental_field"
-KEY_LOADING_OPTIONS_INCREMENTAL_FETCH = "incremental_fetching"
+KEY_LOADING_OPTIONS_INCREMENTAL_FETCH = "incremental_fetch"
 KEY_LOADING_OPTIONS_PKEY = "pkey"
 
 # list of mandatory parameters => if some is missing,

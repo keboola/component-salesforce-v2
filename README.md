@@ -1,4 +1,4 @@
-Salesforce Extractor
+# Salesforce Extractor
 
 The component exports data from Salesforce based on a SOQL query or an object you provide 
 and saves it into the out/tables directory.

@@ -66,7 +66,7 @@
             }
           }
         },
-        "pkeys": {
+        "pkey": {
           "type": "array",
           "items": {
             "type": "string",

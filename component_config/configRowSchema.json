@@ -79,7 +79,7 @@
           "propertyOrder": 5000
         },
         "incremental_fetch": {
-          "title": "Incremental fetching",
+          "title": "Incremental fetch",
           "type": "boolean",
           "format": "checkbox",
           "default": false,

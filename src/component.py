@@ -51,6 +51,10 @@ class Component(ComponentBase):
         pkey = loading_options.get(KEY_LOADING_OPTIONS_PKEY, [])
         incremental = loading_options.get(KEY_LOADING_OPTIONS_INCREMENTAL, False)
 
+        if incremental and not pkey:
+            raise UserException("Incremental load is set but no private key. Specify a private key in the "
+                                "configuration parameters")
+
         try:
             salesforce_client = self.login_to_salesforce(params)
         except SalesforceAuthenticationFailed:
@@ -114,8 +118,8 @@ class Component(ComponentBase):
         salesforce_object = params.get(KEY_OBJECT)
         soql_query_string = params.get(KEY_SOQL_QUERY)
         incremental = loading_options.get(KEY_LOADING_OPTIONS_INCREMENTAL, False)
-        incremental_field = loading_options.get(KEY_LOADING_OPTIONS_INCREMENTAL_FIELD, "LastModifiedDate")
-        incremental_fetching = loading_options.get(KEY_LOADING_OPTIONS_INCREMENTAL_FETCH)
+        incremental_field = loading_options.get(KEY_LOADING_OPTIONS_INCREMENTAL_FIELD)
+        incremental_fetch = loading_options.get(KEY_LOADING_OPTIONS_INCREMENTAL_FETCH)
         is_deleted = params.get(KEY_IS_DELETED, False)
 
         try:
@@ -129,8 +133,11 @@ class Component(ComponentBase):
             raise UserException(f"Object type {salesforce_object} does not exist in Salesforce, "
                                 f"enter a valid object")
 
-        if incremental and incremental_fetching and continue_from_value:
+        if incremental and incremental_fetch and incremental_field and continue_from_value:
             soql_query.set_query_to_incremental(incremental_field, continue_from_value)
+        elif incremental and incremental_fetch and not incremental_field:
+            raise UserException("Incremental field is not specified, if you want to use incremental fetching, it must "
+                                "specified.")
 
         soql_query.set_deleted_option_in_query(is_deleted)
 

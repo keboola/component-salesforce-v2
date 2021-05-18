@@ -8,16 +8,12 @@ class QueryType(Enum):
 
 
 class SoqlQuery:
-    def __init__(self, query=None, sf_object=None, sf_object_fields=None, query_type="get"):
-        if sf_object_fields:
-            self.sf_object_fields = self.list_to_lower(sf_object_fields)
+    def __init__(self, query=None, sf_object=None, sf_object_fields=[], query_type="get"):
+        self.sf_object_fields = sf_object_fields
         self.sf_object = sf_object if sf_object else self.get_object_from_query(query)
         self.query = query if query else self.construct_soql_from_fields()
         self.query_type = QueryType(query_type)
         self.check_query()
-
-    def set_sf_object_fields(self, sf_object_fields):
-        self.sf_object_fields = self.list_to_lower(sf_object_fields)
 
     @staticmethod
     def list_to_lower(str_list):
@@ -51,7 +47,7 @@ class SoqlQuery:
                 raise ValueError("SOQL query must contain FROM")
 
     def set_query_to_incremental(self, incremental_field, continue_from_value):
-        if incremental_field.lower() in self.sf_object_fields:
+        if incremental_field.lower() in self.list_to_lower(self.sf_object_fields):
             incremental_string = f" WHERE {incremental_field} >= {continue_from_value}"
         else:
             raise ValueError(f"Field {incremental_field} is not present in the {self.sf_object} object ")
@@ -59,19 +55,21 @@ class SoqlQuery:
         self.query = self._add_to_where_clause(self.query, incremental_string)
 
     def set_deleted_option_in_query(self, deleted):
-        if not deleted and "isdeleted" in self.sf_object_fields:
+        if not deleted and "isdeleted" in self.list_to_lower(self.sf_object_fields):
             is_deleted_string = " WHERE IsDeleted = false "
             self.query = self._add_to_where_clause(self.query, is_deleted_string)
-        elif deleted and "isdeleted" not in self.sf_object_fields:
+        elif deleted and "isdeleted" not in self.list_to_lower(self.sf_object_fields):
             logging.warning(f"Waring: IsDeleted is not a field in the {self.sf_object} object, cannot fetch deleted "
                             f"records")
 
     @staticmethod
     def _add_to_where_clause(soql, new_where_string):
         and_string = " and "
-        where_location = soql.lower().find(" where ")
-        if where_location > 0:
-            before_where, after_where = soql.lower().split(" where ")
+        where_location_start = soql.lower().find(" where ")
+        where_location_end = where_location_start + len(" where ")
+        if where_location_start > 0:
+            before_where = soql[:where_location_start]
+            after_where = soql[where_location_end:]
             new_query = "".join([before_where, new_where_string, and_string, after_where])
         else:
             new_query = "".join([soql, new_where_string])

@@ -121,6 +121,9 @@ class SoqlQuery:
             query_in_brackets = query_in_brackets.replace("(", "").replace(")", "")
             fields.extend(SoqlQuery._get_fields_between_select_and_from(query_in_brackets))
 
+        # remove blank columns from fieldnames if extra whitespaces exist
+        fields = [field for field in fields if field]
+
         return fields
 
     @staticmethod

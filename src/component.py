@@ -128,16 +128,19 @@ class Component(ComponentBase):
         incremental_fetch = loading_options.get(KEY_LOADING_OPTIONS_INCREMENTAL_FETCH)
         is_deleted = params.get(KEY_IS_DELETED, False)
 
-        try:
-            if soql_query_string:
+        if soql_query_string:
+            try:
                 soql_query = salesforce_client.build_query_from_string(soql_query_string)
-            elif salesforce_object:
+            except SalesforceResourceNotFound as salesforce_error:
+                raise UserException(f"Custom SOQL could not be built : {salesforce_error}")
+        elif salesforce_object:
+            try:
                 soql_query = salesforce_client.build_soql_query_from_object_name(salesforce_object)
-            else:
-                raise UserException(f'Either {KEY_SOQL_QUERY} or {KEY_OBJECT} parameters must be specified.')
-        except SalesforceResourceNotFound:
-            raise UserException(f"Object type {salesforce_object} does not exist in Salesforce, "
-                                f"enter a valid object")
+            except SalesforceResourceNotFound:
+                raise UserException(f"Object type {salesforce_object} does not exist in Salesforce, "
+                                    f"enter a valid object")
+        else:
+            raise UserException(f'Either {KEY_SOQL_QUERY} or {KEY_OBJECT} parameters must be specified.')
 
         if incremental and incremental_fetch and incremental_field and continue_from_value:
             soql_query.set_query_to_incremental(incremental_field, continue_from_value)

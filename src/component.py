@@ -15,8 +15,9 @@ from simple_salesforce.exceptions import SalesforceAuthenticationFailed
 from simple_salesforce.exceptions import SalesforceResourceNotFound
 
 from salesforce.client import SalesforceClient
-
 # configuration variables
+from salesforce.soql_query import SoqlQuery
+
 KEY_USERNAME = "username"
 KEY_PASSWORD = "#password"
 KEY_SECURITY_TOKEN = "#security_token"
@@ -73,8 +74,8 @@ class Component(ComponentBase):
         table = self.create_out_table_definition(f'{soql_query.sf_object}.csv',
                                                  primary_key=pkey,
                                                  incremental=incremental,
+                                                 columns=soql_query.query_field_names,
                                                  is_sliced=True)
-        table.columns = soql_query.field_names
 
         self.create_sliced_directory(table.full_path)
 
@@ -119,7 +120,7 @@ class Component(ComponentBase):
             else:
                 logging.info("No records found using SOQL query")
 
-    def build_soql_query(self, salesforce_client, params, continue_from_value):
+    def build_soql_query(self, salesforce_client, params, continue_from_value) -> SoqlQuery:
         loading_options = params.get(KEY_LOADING_OPTIONS, {})
         salesforce_object = params.get(KEY_OBJECT)
         soql_query_string = params.get(KEY_SOQL_QUERY)

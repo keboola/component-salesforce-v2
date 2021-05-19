@@ -1,44 +1,28 @@
 import logging
-from retry import retry
 from time import sleep
+from urllib.parse import urlparse
+
+from retry import retry
 from salesforce_bulk import SalesforceBulk
 from salesforce_bulk.salesforce_bulk import BulkBatchFailed
+from salesforce_bulk.salesforce_bulk import DEFAULT_API_VERSION
 from simple_salesforce import SFType
 
 from salesforce.soql_query import SoqlQuery
-
-DEFAULT_API_VERSION = "40.0"
 
 NON_SUPPORTED_BULK_FIELD_TYPES = ["address", "location", "base64", "reference"]
 
 
 class SalesforceClient(SalesforceBulk):
-    # copied from SalesforceBulk lib except host is saved for describe object
     def __init__(self, sessionId=None, host=None, username=None, password=None,
                  API_version=DEFAULT_API_VERSION, sandbox=False,
                  security_token=None, organizationId=None, client_id=None, domain=None):
-        if not sessionId and not username:
-            raise RuntimeError(
-                "Must supply either sessionId/instance_url or username/password")
-        if not sessionId:
-            sessionId, host = SalesforceBulk.login_to_salesforce(
-                username, password, sandbox=sandbox, security_token=security_token,
-                organizationId=organizationId, API_version=API_version, client_id=client_id,
-                domain=domain)
 
-        if host[0:4] == 'http':
-            self.endpoint = host
-        else:
-            self.endpoint = "https://" + host
-        self.host = host
-        self.endpoint += "/services/async/%s" % API_version
-        self.sessionId = sessionId
-        self.jobNS = 'http://www.force.com/2009/06/asyncapi/dataload'
-        self.jobs = {}  # dict of job_id => job_id
-        self.batches = {}  # dict of batch_id => job_id
-        self.job_content_types = {}  # dict of job_id => contentType
-        self.batch_statuses = {}
-        self.API_version = API_version
+        super().__init__(sessionId, host, username, password,
+                         API_version, sandbox,
+                         security_token, organizationId, client_id, domain)
+
+        self.host = urlparse(self.endpoint).hostname
 
     def describe_object(self, sf_object):
         salesforce_type = SFType(sf_object, self.sessionId, self.host)
@@ -68,13 +52,10 @@ class SalesforceClient(SalesforceBulk):
         return {"object": soql_query.sf_object, "result": batch_result}
 
     def build_query_from_string(self, soql_query_string):
-        soql_query = SoqlQuery(query=soql_query_string)
-        soql_query.field_names = SoqlQuery.get_fields_from_query(soql_query_string)
-        soql_query.sf_object_fields = self.describe_object(soql_query.sf_object)
+        soql_query = SoqlQuery.build_from_query_string(soql_query_string, self.describe_object)
         return soql_query
 
     def build_soql_query_from_object_name(self, sf_object):
         sf_object = sf_object.strip()
-        object_fields = self.describe_object(sf_object)
-        soql_query = SoqlQuery(sf_object_fields=object_fields, sf_object=sf_object, field_names=object_fields)
+        soql_query = SoqlQuery.build_from_object(sf_object, self.describe_object)
         return soql_query

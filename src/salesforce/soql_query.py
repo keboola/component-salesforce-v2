@@ -30,7 +30,7 @@ class SoqlQuery:
                                 describe_object_method: Callable[[str], List[str]], query_type="get") -> 'SoqlQuery':
         sf_object = cls._get_object_from_query(query_string)
         sf_object_fields = describe_object_method(sf_object)
-        query_field_names = cls._get_fields_from_query(query_string)
+        query_field_names = cls._get_fields_from_query(query_string, sf_object)
         return SoqlQuery(query_string, sf_object, sf_object_fields, query_field_names, query_type)
 
     @staticmethod
@@ -109,17 +109,17 @@ class SoqlQuery:
         return missing_keys
 
     @staticmethod
-    def _get_fields_from_query(query):
+    def _get_fields_from_query(query, sf_object):
         fields = []
 
         # remove strings within brackets
         query_no_brackets = re.sub("\\(.*?\\)", "", query)
-        fields.extend(SoqlQuery._get_fields_between_select_and_from(query_no_brackets))
+        fields.extend(SoqlQuery._get_fields_between_select_and_from(query_no_brackets, sf_object))
 
         queries_in_brackets = re.findall("\\(.*?\\)", query)
         for query_in_brackets in queries_in_brackets:
             query_in_brackets = query_in_brackets.replace("(", "").replace(")", "")
-            fields.extend(SoqlQuery._get_fields_between_select_and_from(query_in_brackets))
+            fields.extend(SoqlQuery._get_fields_between_select_and_from(query_in_brackets, sf_object))
 
         # remove blank columns from fieldnames if extra whitespaces exist
         fields = [field for field in fields if field]
@@ -127,7 +127,7 @@ class SoqlQuery:
         return fields
 
     @staticmethod
-    def _get_fields_between_select_and_from(query):
+    def _get_fields_between_select_and_from(query, sf_object):
         # split by commma and space
         field_list = re.split('[, ]{1}[\\s]?', query)
 
@@ -139,13 +139,16 @@ class SoqlQuery:
             raise ValueError("SOQL Select Queries must contain both 'select' and 'from'") from value_error
 
         field_list = field_list[select_index + 1:from_index]
-        field_list = [SoqlQuery._remove_object_from_field(field) for field in field_list]
+        field_list = [SoqlQuery._remove_object_from_field(field, sf_object) for field in field_list]
 
         # remove non alphanumeric from fieldnames
         field_list = [re.sub(r'\W+', '', field) for field in field_list]
         return field_list
 
     @staticmethod
-    def _remove_object_from_field(field):
+    def _remove_object_from_field(field, sf_object):
         fields = field.split(".")
-        return fields[-1]
+        if fields[0].lower() == sf_object.lower():
+            return fields[-1]
+        else:
+            return "_".join(fields)

@@ -9,6 +9,7 @@ from os import path, mkdir
 
 import unicodecsv
 from keboola.component.base import ComponentBase, UserException
+from keboola.utils.header_normalizer import get_normalizer, NormalizerStrategy
 from retry import retry
 from salesforce_bulk.salesforce_bulk import BulkBatchFailed
 from simple_salesforce.exceptions import SalesforceAuthenticationFailed
@@ -50,6 +51,7 @@ class Component(ComponentBase):
         loading_options = params.get(KEY_LOADING_OPTIONS, {})
 
         last_run = self.get_state_file().get("last_run")
+        prev_output_columns = self.get_state_file().get("prev_output_columns")
 
         pkey = loading_options.get(KEY_LOADING_OPTIONS_PKEY, [])
         incremental = loading_options.get(KEY_LOADING_OPTIONS_INCREMENTAL, False)
@@ -74,18 +76,26 @@ class Component(ComponentBase):
         table = self.create_out_table_definition(f'{soql_query.sf_object}.csv',
                                                  primary_key=pkey,
                                                  incremental=incremental,
-                                                 columns=soql_query.query_field_names,
                                                  is_sliced=True)
 
         self.create_sliced_directory(table.full_path)
 
+        output_columns = []
         for index, (result, sf_object) in enumerate(self.fetch_result(salesforce_client, soql_query)):
-            self.write_results(result, table, index)
+            output_columns = self.write_results(result, table, index)
+
+        if output_columns:
+            output_columns = self.normalize_column_names(output_columns)
+        else:
+            output_columns = prev_output_columns
+
+        table.columns = output_columns
 
         self.write_tabledef_manifest(table)
 
         soql_timestamp = str(datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S.000Z'))
-        self.write_state_file({"last_run": soql_timestamp})
+        self.write_state_file({"last_run": soql_timestamp,
+                               "prev_output_columns": output_columns})
 
     @retry(SalesforceAuthenticationFailed, tries=3, delay=5)
     def login_to_salesforce(self, params):
@@ -111,14 +121,17 @@ class Component(ComponentBase):
     @staticmethod
     def write_results(result, table, index):
         slice_path = path.join(table.full_path, str(index))
+        fieldnames = []
         with open(slice_path, 'w+', newline='') as out:
             reader = unicodecsv.DictReader(result)
             if reader.fieldnames != RECORDS_NOT_FOUND:
+                fieldnames = reader.fieldnames
                 writer = csv.DictWriter(out, fieldnames=reader.fieldnames, lineterminator='\n', delimiter=',')
                 for row in reader:
                     writer.writerow(row)
             else:
                 logging.info("No records found using SOQL query")
+        return fieldnames
 
     def build_soql_query(self, salesforce_client, params, continue_from_value) -> SoqlQuery:
         loading_options = params.get(KEY_LOADING_OPTIONS, {})
@@ -152,6 +165,11 @@ class Component(ComponentBase):
         soql_query.set_deleted_option_in_query(is_deleted)
 
         return soql_query
+
+    @staticmethod
+    def normalize_column_names(output_columns):
+        header_normalizer = get_normalizer(strategy=NormalizerStrategy.DEFAULT, forbidden_sub="_")
+        return header_normalizer.normalize_header(output_columns)
 
 
 if __name__ == "__main__":

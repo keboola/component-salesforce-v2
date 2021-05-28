@@ -21,7 +21,7 @@ class SoqlQuery:
                           query_type="get") -> 'SoqlQuery':
         sf_object_fields = describe_object_method(sf_object)
         query = cls._construct_soql_from_fields(sf_object, sf_object_fields)
-        return SoqlQuery(query, sf_object, sf_object_fields, sf_object_fields, query_type)
+        return SoqlQuery(query, sf_object, sf_object_fields, query_type)
 
     @classmethod
     def build_from_query_string(cls, query_string: str,

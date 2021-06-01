@@ -14,7 +14,7 @@ class SoqlQuery:
         self.sf_object = sf_object
         self.query = query
         self.query_type = QueryType(query_type)
-        self.check_query()
+        self.check_query(self.query)
 
     @classmethod
     def build_from_object(cls, sf_object: str, describe_object_method: Callable[[str], List[str]],
@@ -26,6 +26,7 @@ class SoqlQuery:
     @classmethod
     def build_from_query_string(cls, query_string: str,
                                 describe_object_method: Callable[[str], List[str]], query_type="get") -> 'SoqlQuery':
+        SoqlQuery.check_query(query_string)
         sf_object = cls._get_object_from_query(query_string)
         sf_object_fields = describe_object_method(sf_object)
         return SoqlQuery(query_string, sf_object, sf_object_fields, query_type)
@@ -53,19 +54,19 @@ class SoqlQuery:
         object_name = re.sub(r'\W+', '', object_name)
         return object_name
 
-    def check_query(self):
-        if not isinstance(self.query, str):
+    @staticmethod
+    def check_query(query):
+        if not isinstance(query, str):
             raise ValueError("SOQL query must be a single string")
-        if self.query_type == QueryType.GET:
-            query_words = self.query.lower().split()
-            if "select" not in query_words:
-                raise ValueError("SOQL query must contain SELECT")
-            if "from" not in query_words:
-                raise ValueError("SOQL query must contain FROM")
-            if "offset" in query_words:
-                raise ValueError("SOQL bulk queries do not support OFFSET clauses")
-            if "typeof" in query_words:
-                raise ValueError("SOQL bulk queries do not support TYPEOF clauses")
+        query_words = query.lower().split()
+        if "select" not in query_words:
+            raise ValueError("SOQL query must contain SELECT")
+        if "from" not in query_words:
+            raise ValueError("SOQL query must contain FROM")
+        if "offset" in query_words:
+            raise ValueError("SOQL bulk queries do not support OFFSET clauses")
+        if "typeof" in query_words:
+            raise ValueError("SOQL bulk queries do not support TYPEOF clauses")
 
     def set_query_to_incremental(self, incremental_field, continue_from_value):
         if incremental_field.lower() in self._list_to_lower(self.sf_object_fields):

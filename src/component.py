@@ -67,9 +67,8 @@ class Component(ComponentBase):
 
         try:
             soql_query = self.build_soql_query(salesforce_client, params, last_run)
-        except (ValueError,TypeError) as query_error:
+        except (ValueError, TypeError) as query_error:
             raise UserException(query_error) from query_error
-
 
         missing_keys = soql_query.check_pkey_in_query(pkey)
         if missing_keys:

@@ -10,7 +10,7 @@ from simple_salesforce import SFType
 
 from salesforce.soql_query import SoqlQuery
 
-NON_SUPPORTED_BULK_FIELD_TYPES = ["address", "location", "base64", "reference"]
+NON_SUPPORTED_BULK_FIELD_TYPES = ["address", "location", "base64"]
 
 
 class SalesforceClient(SalesforceBulk):

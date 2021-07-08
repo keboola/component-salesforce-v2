@@ -12,6 +12,10 @@ from salesforce.soql_query import SoqlQuery
 
 NON_SUPPORTED_BULK_FIELD_TYPES = ["address", "location", "base64"]
 
+# describe object of python client returns field values not supported by bulk api, they must
+# be manually filtered out
+NON_SUPPORTED_BULK_FIELD_NAMES = ["IndividualId", "IqScore", "StockKeepingUnit", "OutOfOfficeMessage"]
+
 
 class SalesforceClient(SalesforceBulk):
     def __init__(self, sessionId=None, host=None, username=None, password=None,
@@ -34,6 +38,8 @@ class SalesforceClient(SalesforceBulk):
     @staticmethod
     def is_bulk_supported_field(field):
         if field["type"] in NON_SUPPORTED_BULK_FIELD_TYPES:
+            return False
+        if field["name"] in NON_SUPPORTED_BULK_FIELD_NAMES:
             return False
         return True
 

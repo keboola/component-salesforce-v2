@@ -20,7 +20,6 @@ from salesforce.client import SalesforceClient
 from salesforce.soql_query import SoqlQuery
 
 # default as previous versions of this component ex-salesforce-v2 had 40.0
-# config row schema json has default 39.0 as ex-salesforce had default 39.0
 DEFAULT_API_VERSION = "40.0"
 
 KEY_USERNAME = "username"

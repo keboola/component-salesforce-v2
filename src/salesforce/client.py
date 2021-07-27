@@ -14,7 +14,7 @@ NON_SUPPORTED_BULK_FIELD_TYPES = ["address", "location", "base64"]
 
 # describe object of python client returns field values not supported by bulk api, they must
 # be manually filtered out
-NON_SUPPORTED_BULK_FIELD_NAMES = ["IndividualId", "IqScore", "StockKeepingUnit", "OutOfOfficeMessage"]
+# NON_SUPPORTED_BULK_FIELD_NAMES = ["IndividualId", "IqScore", "StockKeepingUnit", "OutOfOfficeMessage"]
 
 
 class SalesforceClient(SalesforceBulk):
@@ -26,10 +26,11 @@ class SalesforceClient(SalesforceBulk):
                          API_version, sandbox,
                          security_token, organizationId, client_id, domain)
 
+        self.api_version = API_version
         self.host = urlparse(self.endpoint).hostname
 
     def describe_object(self, sf_object):
-        salesforce_type = SFType(sf_object, self.sessionId, self.host)
+        salesforce_type = SFType(sf_object, self.sessionId, self.host, sf_version=self.api_version)
         object_desc = salesforce_type.describe()
         field_names = [field['name'] for field in object_desc['fields'] if self.is_bulk_supported_field(field)]
 
@@ -39,8 +40,8 @@ class SalesforceClient(SalesforceBulk):
     def is_bulk_supported_field(field):
         if field["type"] in NON_SUPPORTED_BULK_FIELD_TYPES:
             return False
-        if field["name"] in NON_SUPPORTED_BULK_FIELD_NAMES:
-            return False
+        # if field["name"] in NON_SUPPORTED_BULK_FIELD_NAMES:
+        #     return False
         return True
 
     @retry(tries=3, delay=5)

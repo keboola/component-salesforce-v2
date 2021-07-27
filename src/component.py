@@ -19,11 +19,17 @@ from salesforce.client import SalesforceClient
 # configuration variables
 from salesforce.soql_query import SoqlQuery
 
+# default as previous versions of this component ex-salesforce-v2 had 40.0
+# config row schema json has default 39.0 as ex-salesforce had default 39.0
+DEFAULT_API_VERSION = "40.0"
+
 KEY_USERNAME = "username"
 KEY_PASSWORD = "#password"
 KEY_SECURITY_TOKEN = "#security_token"
 KEY_SANDBOX = "sandbox"
+KEY_API_VERSION = "api_version"
 KEY_OBJECT = "object"
+KEY_QUERY_TYPE = "query_type_selector"
 KEY_SOQL_QUERY = "soql_query"
 KEY_IS_DELETED = "is_deleted"
 
@@ -105,7 +111,8 @@ class Component(ComponentBase):
         return SalesforceClient(username=params.get(KEY_USERNAME),
                                 password=params.get(KEY_PASSWORD),
                                 security_token=params.get(KEY_SECURITY_TOKEN),
-                                sandbox=params.get(KEY_SANDBOX))
+                                sandbox=params.get(KEY_SANDBOX),
+                                API_version=params.get(KEY_API_VERSION))
 
     def create_sliced_directory(self, table_path):
         logging.info("Creating sliced file")
@@ -144,13 +151,14 @@ class Component(ComponentBase):
         incremental_field = loading_options.get(KEY_LOADING_OPTIONS_INCREMENTAL_FIELD)
         incremental_fetch = loading_options.get(KEY_LOADING_OPTIONS_INCREMENTAL_FETCH)
         is_deleted = params.get(KEY_IS_DELETED, False)
+        query_type = params.get(KEY_QUERY_TYPE, DEFAULT_API_VERSION)
 
-        if soql_query_string:
+        if query_type == "Custom SOQL":
             try:
                 soql_query = salesforce_client.build_query_from_string(soql_query_string)
             except SalesforceResourceNotFound as salesforce_error:
                 raise UserException(f"Custom SOQL could not be built : {salesforce_error}")
-        elif salesforce_object:
+        elif query_type == "Object":
             try:
                 soql_query = salesforce_client.build_soql_query_from_object_name(salesforce_object)
             except SalesforceResourceNotFound:

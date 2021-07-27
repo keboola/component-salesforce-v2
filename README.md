@@ -16,11 +16,16 @@ and saves it into the out/tables directory.
 - **Security Token** - (REQ) your security token, don't forget it is different for sandbox
 - **sandbox** - (REQ) true when you want to export data from sandbox
 
-## Fetching whole Objects
+## Row configuration
+ - Query type (query_type_selector) - [REQ] Either "Object" or  "Custom SOQL"
+ - Get deleted records (is_deleted) - [OPT] Fetch records that have been deleted
+ - API version (api_version) - [OPT] Specify the version of API you want to extract data from
+
+### Fetching whole Objects
 
 - **Object** - Salesforce object identifier, eg. Account.
 
-## Fetching using SOQL queries
+### Fetching using SOQL queries
 
 - **SOQL query** - Salesforce SOQL query, eg. SELECT Id, FirstName, LastName FROM Contact
 
@@ -42,6 +47,7 @@ the component. This is done by specifying an incremental field in the object tha
     "#password": "password",
     "#security_token": "token_here",
     "sandbox": false,
+    "api_version" : "39.0",
     "object": "Contact",
     "soql_query": "select Id, FirstName,LastName,isdeleted,lastmodifieddate from Contact",
     "is_deleted": false,

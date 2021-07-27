@@ -89,7 +89,7 @@ class Component(ComponentBase):
                                                  primary_key=pkey,
                                                  incremental=incremental,
                                                  is_sliced=True,
-                                                 destination=bucket_name)
+                                                 destination=f'{bucket_name}.{soql_query.sf_object}')
 
         self.create_sliced_directory(table.full_path)
 

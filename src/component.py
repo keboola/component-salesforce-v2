@@ -32,6 +32,8 @@ KEY_QUERY_TYPE = "query_type_selector"
 KEY_SOQL_QUERY = "soql_query"
 KEY_IS_DELETED = "is_deleted"
 
+KEY_BUCKET_NAME = "bucket_name"
+
 KEY_LOADING_OPTIONS = "loading_options"
 KEY_LOADING_OPTIONS_INCREMENTAL = "incremental"
 KEY_LOADING_OPTIONS_INCREMENTAL_FIELD = "incremental_field"
@@ -54,6 +56,8 @@ class Component(ComponentBase):
     def run(self):
         params = self.configuration.parameters
         loading_options = params.get(KEY_LOADING_OPTIONS, {})
+
+        bucket_name = params.get(KEY_BUCKET_NAME, self.get_bucket_name())
 
         last_run = self.get_state_file().get("last_run")
         prev_output_columns = self.get_state_file().get("prev_output_columns")
@@ -84,7 +88,8 @@ class Component(ComponentBase):
         table = self.create_out_table_definition(f'{soql_query.sf_object}.csv',
                                                  primary_key=pkey,
                                                  incremental=incremental,
-                                                 is_sliced=True)
+                                                 is_sliced=True,
+                                                 destination=f'{bucket_name}.{soql_query.sf_object}')
 
         self.create_sliced_directory(table.full_path)
 
@@ -180,6 +185,13 @@ class Component(ComponentBase):
     def normalize_column_names(output_columns):
         header_normalizer = get_normalizer(strategy=NormalizerStrategy.DEFAULT, forbidden_sub="_")
         return header_normalizer.normalize_header(output_columns)
+
+    def get_bucket_name(self):
+        config_id = self.environment_variables.config_id
+        if not config_id:
+            config_id = "000000000"
+        bucket_name = "".join(["kds-team-ex-salesforce-v2-", config_id])
+        return bucket_name
 
 
 if __name__ == "__main__":

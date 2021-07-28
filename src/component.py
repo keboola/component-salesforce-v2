@@ -5,7 +5,9 @@ Template Component main class.
 import csv
 import logging
 from datetime import datetime
-from os import path, mkdir
+from os import path, mkdir, listdir
+import tempfile
+from distutils.dir_util import copy_tree as migrate_data
 
 import unicodecsv
 from keboola.component.base import ComponentBase, UserException
@@ -65,62 +67,75 @@ class Component(ComponentBase):
         pkey = loading_options.get(KEY_LOADING_OPTIONS_PKEY, [])
         incremental = loading_options.get(KEY_LOADING_OPTIONS_INCREMENTAL, False)
 
-        if incremental and not pkey:
-            raise UserException("Incremental load is set but no private key. Specify a private key in the "
-                                "configuration parameters")
+        self.validate_incremental_settings(incremental, pkey)
 
-        try:
-            salesforce_client = self.login_to_salesforce(params)
-        except SalesforceAuthenticationFailed:
-            raise UserException("Authentication Failed : recheck your username, password, and security token ")
+        salesforce_client = self.get_salesforce_client(params)
 
-        try:
-            soql_query = self.build_soql_query(salesforce_client, params, last_run)
-        except (ValueError, TypeError) as query_error:
-            raise UserException(query_error) from query_error
+        soql_query = self.build_soql_query(salesforce_client, params, last_run)
 
-        missing_keys = soql_query.check_pkey_in_query(pkey)
-        if missing_keys:
-            raise UserException(f"Private Keys {missing_keys} not in query, Add to SOQL query or check that it exists"
-                                f" in the Salesforce object.")
+        self.validate_soql_query(soql_query, pkey)
+
         logging.info(f"Primary key : {pkey} set")
 
-        table = self.create_out_table_definition(f'{soql_query.sf_object}.csv',
-                                                 primary_key=pkey,
-                                                 incremental=incremental,
-                                                 is_sliced=True,
-                                                 destination=f'{bucket_name}.{soql_query.sf_object}')
-
-        self.create_sliced_directory(table.full_path)
-
-        output_columns = []
+        temp_dir = tempfile.TemporaryDirectory()
+        self.create_sliced_directory(temp_dir.name)
         for index, (result, sf_object) in enumerate(self.fetch_result(salesforce_client, soql_query)):
-            output_columns = self.write_results(result, table, index)
+            output_columns = self.write_results(result, temp_dir.name, index)
 
         if output_columns:
             output_columns = self.normalize_column_names(output_columns)
         else:
             output_columns = prev_output_columns
 
-        table.columns = output_columns
+        all_files_empty = self.check_temp_dir(temp_dir)
 
-        self.write_tabledef_manifest(table)
+        if not all_files_empty:
+            table = self.create_out_table_definition(f'{soql_query.sf_object}.csv',
+                                                     primary_key=pkey,
+                                                     incremental=incremental,
+                                                     is_sliced=True,
+                                                     columns=output_columns,
+                                                     destination=f'{bucket_name}.{soql_query.sf_object}')
+            self.create_sliced_directory(table.full_path)
+            migrate_data(temp_dir.name, table.full_path)
+            self.write_tabledef_manifest(table)
 
         soql_timestamp = str(datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S.000Z'))
         self.write_state_file({"last_run": soql_timestamp,
                                "prev_output_columns": output_columns})
 
+    @staticmethod
+    def validate_incremental_settings(incremental, pkey):
+        if incremental and not pkey:
+            raise UserException("Incremental load is set but no private key. Specify a private key in the "
+                                "configuration parameters")
+
+    @staticmethod
+    def validate_soql_query(soql_query, pkey):
+        missing_keys = soql_query.check_pkey_in_query(pkey)
+        if missing_keys:
+            raise UserException(f"Private Keys {missing_keys} not in query, Add to SOQL query or check that it exists"
+                                f" in the Salesforce object.")
+
+    def get_salesforce_client(self, params):
+        try:
+            return self._login_to_salesforce(params)
+        except SalesforceAuthenticationFailed:
+            raise UserException("Authentication Failed : recheck your username, password, and security token ")
+
     @retry(SalesforceAuthenticationFailed, tries=3, delay=5)
-    def login_to_salesforce(self, params):
+    def _login_to_salesforce(self, params):
         return SalesforceClient(username=params.get(KEY_USERNAME),
                                 password=params.get(KEY_PASSWORD),
                                 security_token=params.get(KEY_SECURITY_TOKEN),
                                 sandbox=params.get(KEY_SANDBOX),
                                 API_version=params.get(KEY_API_VERSION))
 
-    def create_sliced_directory(self, table_path):
+    @staticmethod
+    def create_sliced_directory(table_path):
         logging.info("Creating sliced file")
-        mkdir(table_path)
+        if not path.isdir(table_path):
+            mkdir(table_path)
 
     @retry(tries=3, delay=5)
     def fetch_result(self, salesforce_client, soql_query):
@@ -134,7 +149,7 @@ class Component(ComponentBase):
 
     @staticmethod
     def write_results(result, table, index):
-        slice_path = path.join(table.full_path, str(index))
+        slice_path = path.join(table, str(index))
         fieldnames = []
         with open(slice_path, 'w+', newline='') as out:
             reader = unicodecsv.DictReader(result)
@@ -147,7 +162,14 @@ class Component(ComponentBase):
                 logging.info("No records found using SOQL query")
         return fieldnames
 
-    def build_soql_query(self, salesforce_client, params, continue_from_value) -> SoqlQuery:
+    def build_soql_query(self, salesforce_client, params, last_run):
+        try:
+            return self._build_soql_query(salesforce_client, params, last_run)
+        except (ValueError, TypeError) as query_error:
+            raise UserException(query_error) from query_error
+
+    @staticmethod
+    def _build_soql_query(salesforce_client, params, continue_from_value) -> SoqlQuery:
         loading_options = params.get(KEY_LOADING_OPTIONS, {})
         salesforce_object = params.get(KEY_OBJECT)
         soql_query_string = params.get(KEY_SOQL_QUERY)
@@ -185,6 +207,17 @@ class Component(ComponentBase):
     def normalize_column_names(output_columns):
         header_normalizer = get_normalizer(strategy=NormalizerStrategy.DEFAULT, forbidden_sub="_")
         return header_normalizer.normalize_header(output_columns)
+
+    @staticmethod
+    def check_temp_dir(temp_dir):
+        files_in_dir = listdir(temp_dir.name)
+        all_files_empty = True
+        for file in files_in_dir:
+            filepath = path.join(temp_dir.name, file)
+            size = path.getsize(filepath)
+            if size > 0:
+                all_files_empty = False
+        return all_files_empty
 
     def get_bucket_name(self):
         config_id = self.environment_variables.config_id

@@ -87,9 +87,7 @@ class Component(ComponentBase):
         else:
             output_columns = prev_output_columns
 
-        all_files_empty = self.check_temp_dir(temp_dir)
-
-        if not all_files_empty:
+        if not output_columns:
             table = self.create_out_table_definition(f'{soql_query.sf_object}.csv',
                                                      primary_key=pkey,
                                                      incremental=incremental,
@@ -129,7 +127,7 @@ class Component(ComponentBase):
                                 password=params.get(KEY_PASSWORD),
                                 security_token=params.get(KEY_SECURITY_TOKEN),
                                 sandbox=params.get(KEY_SANDBOX),
-                                API_version=params.get(KEY_API_VERSION))
+                                API_version=params.get(KEY_API_VERSION, DEFAULT_API_VERSION))
 
     @staticmethod
     def create_sliced_directory(table_path):
@@ -207,17 +205,6 @@ class Component(ComponentBase):
     def normalize_column_names(output_columns):
         header_normalizer = get_normalizer(strategy=NormalizerStrategy.DEFAULT, forbidden_sub="_")
         return header_normalizer.normalize_header(output_columns)
-
-    @staticmethod
-    def check_temp_dir(temp_dir):
-        files_in_dir = listdir(temp_dir.name)
-        all_files_empty = True
-        for file in files_in_dir:
-            filepath = path.join(temp_dir.name, file)
-            size = path.getsize(filepath)
-            if size > 0:
-                all_files_empty = False
-        return all_files_empty
 
     def get_bucket_name(self):
         config_id = self.environment_variables.config_id

@@ -87,7 +87,7 @@ class Component(ComponentBase):
         else:
             output_columns = prev_output_columns
 
-        if not output_columns:
+        if output_columns:
             table = self.create_out_table_definition(f'{soql_query.sf_object}.csv',
                                                      primary_key=pkey,
                                                      incremental=incremental,

@@ -5,7 +5,7 @@ Template Component main class.
 import csv
 import logging
 from datetime import datetime
-from os import path, mkdir, listdir
+from os import path, mkdir
 import tempfile
 from distutils.dir_util import copy_tree as migrate_data
 

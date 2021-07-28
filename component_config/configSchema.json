@@ -6,7 +6,8 @@
   "required": [
     "username",
     "#password",
-    "#security_token"
+    "#security_token",
+    "api_version"
   ],
   "properties": {
     "username": {

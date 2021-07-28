@@ -2,8 +2,7 @@
   "title": "Query Configuration",
   "type": "object",
   "required": [
-    "query_type_selector",
-    "api_version"
+    "query_type_selector"
   ],
   "properties": {
     "query_type_selector": {

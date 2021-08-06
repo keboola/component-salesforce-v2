@@ -79,7 +79,7 @@
         "51.0",
         "52.0"
       ],
-      "default": "40.0",
+      "default": "42.0",
       "description" : "Specify the version of API you want to extract data from",
       "propertyOrder": 1
     }

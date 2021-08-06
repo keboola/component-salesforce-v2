@@ -22,7 +22,7 @@ from salesforce.client import SalesforceClient
 from salesforce.soql_query import SoqlQuery
 
 # default as previous versions of this component ex-salesforce-v2 had 40.0
-DEFAULT_API_VERSION = "40.0"
+DEFAULT_API_VERSION = "42.0"
 
 KEY_USERNAME = "username"
 KEY_PASSWORD = "#password"

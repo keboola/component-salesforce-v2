@@ -29,6 +29,7 @@
     "soql_query": {
       "title": "SOQL Query",
       "type": "string",
+	  "format": "textarea",
       "options": {
         "dependencies": {
           "query_type_selector": "Custom SOQL"

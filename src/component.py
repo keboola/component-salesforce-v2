@@ -212,16 +212,8 @@ class Component(ComponentBase):
 
 if __name__ == "__main__":
     try:
-        import time
-
-        start = time.time()
-        print("hello")
-
         comp = Component()
         comp.run()
-
-        end = time.time()
-        print(end - start)
     except UserException as exc:
         logging.exception(exc)
         exit(1)

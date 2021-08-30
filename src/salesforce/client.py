@@ -12,6 +12,8 @@ from salesforce.soql_query import SoqlQuery
 
 NON_SUPPORTED_BULK_FIELD_TYPES = ["address", "location", "base64"]
 CHUNK_SIZE = 100000
+ALLOWED_CHUNKING_OBJECTS = ["account", "campaign", "campaignMember", "case", "contact", "lead", "loginhistory",
+                            "opportunity", "task", "user"]
 
 
 # describe object of python client returns field values not supported by bulk api, they must
@@ -46,8 +48,12 @@ class SalesforceClient(SalesforceBulk):
 
     @retry(tries=3, delay=5)
     def run_query(self, soql_query):
+        pk_chunking = False
+        if soql_query.sf_object.lower() in ALLOWED_CHUNKING_OBJECTS:
+            pk_chunking = CHUNK_SIZE
+
         job = self.create_queryall_job(soql_query.sf_object, contentType='CSV', concurrency='Parallel',
-                                       pk_chunking=CHUNK_SIZE)
+                                       pk_chunking=pk_chunking)
         self.query(job, soql_query.query)
         logging.info(f"Running SOQL : {soql_query.query}")
         try:
@@ -57,7 +63,6 @@ class SalesforceClient(SalesforceBulk):
             logging.exception(batch_fail.state_message)
         logging.info("SOQL ran successfully, fetching results")
         batch_id_list = [batch['id'] for batch in self.get_batch_list(job) if batch['state'] == 'Completed']
-
         return job, batch_id_list
 
     def fetch_batch_results(self, job, batch_id_list):

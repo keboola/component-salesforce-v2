@@ -150,8 +150,7 @@ class Component(ComponentBase):
             if reader.fieldnames != RECORDS_NOT_FOUND:
                 fieldnames = reader.fieldnames
                 writer = csv.DictWriter(out, fieldnames=reader.fieldnames, lineterminator='\n', delimiter=',')
-                for row in reader:
-                    writer.writerow(row)
+                writer.writerows(reader)
             else:
                 logging.info("No records found using SOQL query")
         return fieldnames

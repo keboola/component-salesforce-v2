@@ -6,8 +6,6 @@ import csv
 import logging
 from datetime import datetime
 from os import path, mkdir
-import tempfile
-from distutils.dir_util import copy_tree as migrate_data
 
 import unicodecsv
 from keboola.component.base import ComponentBase, UserException
@@ -77,26 +75,24 @@ class Component(ComponentBase):
 
         logging.info(f"Primary key : {pkey} set")
 
-        temp_dir = tempfile.TemporaryDirectory()
-        self.create_sliced_directory(temp_dir.name)
-        for index, (result, sf_object) in enumerate(self.fetch_result(salesforce_client, soql_query)):
-            output_columns = self.write_results(result, temp_dir.name, index)
+        table = self.create_out_table_definition(f'{soql_query.sf_object}',
+                                                 primary_key=pkey,
+                                                 incremental=incremental,
+                                                 is_sliced=True,
+                                                 destination=f'{bucket_name}.{soql_query.sf_object}')
 
-        if output_columns:
+        self.create_sliced_directory(table.full_path)
+        output_columns = []
+        for index, (result, sf_object) in enumerate(self.fetch_result(salesforce_client, soql_query)):
+            output_columns = self.write_results(result, table.full_path, index)
             output_columns = self.normalize_column_names(output_columns)
-        else:
+
+        if not output_columns:
             output_columns = prev_output_columns
 
-        if output_columns:
-            table = self.create_out_table_definition(f'{soql_query.sf_object}.csv',
-                                                     primary_key=pkey,
-                                                     incremental=incremental,
-                                                     is_sliced=True,
-                                                     columns=output_columns,
-                                                     destination=f'{bucket_name}.{soql_query.sf_object}')
-            self.create_sliced_directory(table.full_path)
-            migrate_data(temp_dir.name, table.full_path)
-            self.write_tabledef_manifest(table)
+        table.columns = output_columns
+
+        self.write_tabledef_manifest(table)
 
         soql_timestamp = str(datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S.000Z'))
         self.write_state_file({"last_run": soql_timestamp,
@@ -216,8 +212,16 @@ class Component(ComponentBase):
 
 if __name__ == "__main__":
     try:
+        import time
+
+        start = time.time()
+        print("hello")
+
         comp = Component()
         comp.run()
+
+        end = time.time()
+        print(end - start)
     except UserException as exc:
         logging.exception(exc)
         exit(1)

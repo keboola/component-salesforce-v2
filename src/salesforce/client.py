@@ -40,8 +40,6 @@ class SalesforceClient(SalesforceBulk):
     def is_bulk_supported_field(field):
         if field["type"] in NON_SUPPORTED_BULK_FIELD_TYPES:
             return False
-        # if field["name"] in NON_SUPPORTED_BULK_FIELD_NAMES:
-        #     return False
         return True
 
     @retry(tries=3, delay=5)

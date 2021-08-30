@@ -84,6 +84,7 @@ class Component(ComponentBase):
         self.create_sliced_directory(table.full_path)
         output_columns = []
         for index, (result, sf_object) in enumerate(self.fetch_result(salesforce_client, soql_query)):
+            logging.info(f"Writing results of chunk {index+1}")
             output_columns = self.write_results(result, table.full_path, index)
             output_columns = self.normalize_column_names(output_columns)
 
@@ -133,10 +134,10 @@ class Component(ComponentBase):
 
     @retry(tries=3, delay=5)
     def fetch_result(self, salesforce_client, soql_query):
-        result = salesforce_client.run_query(soql_query)
-        sf_object = result["object"]
+        job, batch_id_list = salesforce_client.run_query(soql_query)
+        sf_object = soql_query.sf_object
         try:
-            for result in result["result"]:
+            for result in salesforce_client.fetch_batch_results(job, batch_id_list):
                 yield result, sf_object
         except BulkBatchFailed:
             raise UserException("Invalid Query: Failed to process query. Check syntax, objects, and fields")

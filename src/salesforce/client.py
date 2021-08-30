@@ -11,6 +11,8 @@ from simple_salesforce import SFType
 from salesforce.soql_query import SoqlQuery
 
 NON_SUPPORTED_BULK_FIELD_TYPES = ["address", "location", "base64"]
+CHUNK_SIZE = 100000
+
 
 # describe object of python client returns field values not supported by bulk api, they must
 # be manually filtered out
@@ -44,17 +46,25 @@ class SalesforceClient(SalesforceBulk):
 
     @retry(tries=3, delay=5)
     def run_query(self, soql_query):
-        job = self.create_queryall_job(soql_query.sf_object, contentType='CSV')
-        batch = self.query(job, soql_query.query)
-        self.close_job(job)
+        job = self.create_queryall_job(soql_query.sf_object, contentType='CSV', concurrency='Parallel',
+                                       pk_chunking=CHUNK_SIZE)
+        self.query(job, soql_query.query)
         logging.info(f"Running SOQL : {soql_query.query}")
         try:
-            while not self.is_batch_done(batch):
+            while not self.job_status(job)['numberBatchesTotal'] == self.job_status(job)['numberBatchesCompleted']:
                 sleep(10)
         except BulkBatchFailed as batch_fail:
             logging.exception(batch_fail.state_message)
-        batch_result = self.get_all_results_for_query_batch(batch)
-        return {"object": soql_query.sf_object, "result": batch_result}
+        logging.info("SOQL ran successfully, fetching results")
+        batch_id_list = [batch['id'] for batch in self.get_batch_list(job) if batch['state'] == 'Completed']
+
+        return job, batch_id_list
+
+    def fetch_batch_results(self, job, batch_id_list):
+        for batch_id in batch_id_list:
+            for result in self.get_all_results_for_query_batch(batch_id, job, chunk_size=CHUNK_SIZE):
+                yield result
+        self.close_job(job)
 
     def build_query_from_string(self, soql_query_string):
         soql_query = SoqlQuery.build_from_query_string(soql_query_string, self.describe_object)

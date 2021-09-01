@@ -9,7 +9,13 @@ from salesforce_bulk.salesforce_bulk import BulkBatchFailed
 from salesforce_bulk.salesforce_bulk import DEFAULT_API_VERSION
 from simple_salesforce import SFType
 
+from collections import OrderedDict
 from .soql_query import SoqlQuery
+from typing import List
+from typing import Tuple
+from typing import Any
+from typing import Optional
+from typing import Iterator
 
 NON_SUPPORTED_BULK_FIELD_TYPES = ["address", "location", "base64"]
 CHUNK_SIZE = 100000
@@ -18,9 +24,11 @@ ALLOWED_CHUNKING_OBJECTS = ["account", "campaign", "campaignMember", "case", "co
 
 
 class SalesforceClient(SalesforceBulk):
-    def __init__(self, sessionId=None, host=None, username=None, password=None,
-                 API_version=DEFAULT_API_VERSION, sandbox=False,
-                 security_token=None, organizationId=None, client_id=None, domain=None):
+    def __init__(self, sessionId: Optional[Any] = None, host: Optional[Any] = None, username: str = None,
+                 password: str = None,
+                 API_version: str = DEFAULT_API_VERSION, sandbox: bool = False,
+                 security_token: str = None, organizationId: Optional[Any] = None, client_id: Optional[Any] = None,
+                 domain: Optional[Any] = None) -> None:
 
         super().__init__(sessionId, host, username, password,
                          API_version, sandbox,
@@ -29,7 +37,7 @@ class SalesforceClient(SalesforceBulk):
         self.api_version = API_version
         self.host = urlparse(self.endpoint).hostname
 
-    def describe_object(self, sf_object):
+    def describe_object(self, sf_object: str) -> List[str]:
         salesforce_type = SFType(sf_object, self.sessionId, self.host, sf_version=self.api_version)
         object_desc = salesforce_type.describe()
         field_names = [field['name'] for field in object_desc['fields'] if self.is_bulk_supported_field(field)]
@@ -37,13 +45,13 @@ class SalesforceClient(SalesforceBulk):
         return field_names
 
     @staticmethod
-    def is_bulk_supported_field(field):
+    def is_bulk_supported_field(field: OrderedDict) -> bool:
         if field["type"] in NON_SUPPORTED_BULK_FIELD_TYPES:
             return False
         return True
 
     @retry(tries=3, delay=5)
-    def run_query(self, soql_query):
+    def run_query(self, soql_query: SoqlQuery) -> Tuple[str, List[str]]:
         pk_chunking = False
         if soql_query.sf_object.lower() in ALLOWED_CHUNKING_OBJECTS:
             pk_chunking = CHUNK_SIZE
@@ -61,13 +69,13 @@ class SalesforceClient(SalesforceBulk):
         batch_id_list = [batch['id'] for batch in self.get_batch_list(job) if batch['state'] == 'Completed']
         return job, batch_id_list
 
-    def fetch_batch_results(self, job, batch_id_list):
+    def fetch_batch_results(self, job: str, batch_id_list: List[str]) -> Iterator:
         for batch_id in batch_id_list:
             for result in self.get_all_results_from_query_batch(batch_id, job):
                 yield result
         self.close_job(job)
 
-    def get_all_results_from_query_batch(self, batch_id, job_id=None, chunk_size=8196):
+    def get_all_results_from_query_batch(self, batch_id: str, job_id: str = None, chunk_size: int = 8196) -> Iterator:
         """
         Gets result ids and generates each result set from the batch and returns it
         as an generator fetching the next result set when needed
@@ -75,6 +83,7 @@ class SalesforceClient(SalesforceBulk):
         Args:
             batch_id: id of batch
             job_id: id of job, if not provided, it will be looked up
+            chunk_size : size of chunks for stream
         """
         result_ids = self.get_query_batch_result_ids(batch_id, job_id=job_id)
         if not result_ids:
@@ -87,7 +96,8 @@ class SalesforceClient(SalesforceBulk):
                 chunk_size=chunk_size
             )
 
-    def get_query_batch_result(self, batch_id, result_id, job_id=None, chunk_size=8196):
+    def get_query_batch_result(self, batch_id: str, result_id: str, job_id: str = None,
+                               chunk_size: int = 8196) -> Iterator:
         job_id = job_id or self.lookup_job_id(batch_id)
 
         uri = urljoin(
@@ -102,11 +112,11 @@ class SalesforceClient(SalesforceBulk):
         iterator = (x.replace(b'\0', b'') for x in resp.iter_lines(chunk_size=chunk_size))
         return iterator
 
-    def build_query_from_string(self, soql_query_string):
+    def build_query_from_string(self, soql_query_string: str) -> SoqlQuery:
         soql_query = SoqlQuery.build_from_query_string(soql_query_string, self.describe_object)
         return soql_query
 
-    def build_soql_query_from_object_name(self, sf_object):
+    def build_soql_query_from_object_name(self, sf_object: str) -> SoqlQuery:
         sf_object = sf_object.strip()
         soql_query = SoqlQuery.build_from_object(sf_object, self.describe_object)
         return soql_query

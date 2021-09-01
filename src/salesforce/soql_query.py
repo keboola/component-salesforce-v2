@@ -17,26 +17,25 @@ class SoqlQuery:
         self.check_query(self.query)
 
     @classmethod
-    def build_from_object(cls, sf_object: str, describe_object_method: Callable[[str], List[str]],
-                          query_type="get") -> 'SoqlQuery':
+    def build_from_object(cls, sf_object: str, describe_object_method: Callable, query_type="get") -> 'SoqlQuery':
         sf_object_fields = describe_object_method(sf_object)
         query = cls._construct_soql_from_fields(sf_object, sf_object_fields)
         return SoqlQuery(query, sf_object, sf_object_fields, query_type)
 
     @classmethod
     def build_from_query_string(cls, query_string: str,
-                                describe_object_method: Callable[[str], List[str]], query_type="get") -> 'SoqlQuery':
+                                describe_object_method: Callable, query_type="get") -> 'SoqlQuery':
         SoqlQuery.check_query(query_string)
         sf_object = cls._get_object_from_query(query_string)
         sf_object_fields = describe_object_method(sf_object)
         return SoqlQuery(query_string, sf_object, sf_object_fields, query_type)
 
     @staticmethod
-    def _list_to_lower(str_list):
+    def _list_to_lower(str_list: List[str]) -> List[str]:
         return [x.lower() for x in str_list]
 
     @staticmethod
-    def _construct_soql_from_fields(sf_object, sf_object_fields):
+    def _construct_soql_from_fields(sf_object: str, sf_object_fields: List[str]) -> str:
         soql_query = f"SELECT {','.join(sf_object_fields)} FROM {sf_object}"
         return soql_query
 
@@ -55,7 +54,7 @@ class SoqlQuery:
         return object_name
 
     @staticmethod
-    def check_query(query):
+    def check_query(query: str) -> None:
         if not isinstance(query, str):
             raise ValueError("SOQL query must be a single string")
         query_words = query.lower().split()
@@ -68,7 +67,7 @@ class SoqlQuery:
         if "typeof" in query_words:
             raise ValueError("SOQL bulk queries do not support TYPEOF clauses")
 
-    def set_query_to_incremental(self, incremental_field, continue_from_value):
+    def set_query_to_incremental(self, incremental_field: str, continue_from_value: str) -> None:
         if incremental_field.lower() in self._list_to_lower(self.sf_object_fields):
             incremental_string = f" WHERE {incremental_field} >= {continue_from_value}"
         else:
@@ -76,7 +75,7 @@ class SoqlQuery:
 
         self.query = self._add_to_where_clause(self.query, incremental_string)
 
-    def set_deleted_option_in_query(self, deleted):
+    def set_deleted_option_in_query(self, deleted: bool) -> None:
         if not deleted and "isdeleted" in self._list_to_lower(self.sf_object_fields):
             is_deleted_string = " WHERE IsDeleted = false "
             self.query = self._add_to_where_clause(self.query, is_deleted_string)
@@ -85,7 +84,7 @@ class SoqlQuery:
                             f"records")
 
     @staticmethod
-    def _add_to_where_clause(soql, new_where_string):
+    def _add_to_where_clause(soql: str, new_where_string: str) -> str:
         and_string = " and "
         where_location_start = soql.lower().find(" where ")
         where_location_end = where_location_start + len(" where ")
@@ -97,7 +96,7 @@ class SoqlQuery:
             new_query = "".join([soql, new_where_string])
         return new_query
 
-    def check_pkey_in_query(self, pkeys):
+    def check_pkey_in_query(self, pkeys: List[str]) -> List:
         missing_keys = []
         # split a string by space, comma, and period characters
         query_words = re.split("\\s|(?<!\\d)[,.](?!\\d)", self.query.lower())

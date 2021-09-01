@@ -16,8 +16,11 @@ from simple_salesforce.exceptions import SalesforceAuthenticationFailed
 from simple_salesforce.exceptions import SalesforceResourceNotFound
 
 from salesforce.client import SalesforceClient
-# configuration variables
 from salesforce.soql_query import SoqlQuery
+from typing import List
+from typing import Dict
+from typing import Iterator
+from typing import Tuple
 
 # default as previous versions of this component ex-salesforce-v2 had 40.0
 DEFAULT_API_VERSION = "42.0"
@@ -105,26 +108,26 @@ class Component(ComponentBase):
                                "prev_output_columns": output_columns})
 
     @staticmethod
-    def validate_incremental_settings(incremental, pkey):
+    def validate_incremental_settings(incremental: bool, pkey: List[str]) -> None:
         if incremental and not pkey:
             raise UserException("Incremental load is set but no private key. Specify a private key in the "
                                 "configuration parameters")
 
     @staticmethod
-    def validate_soql_query(soql_query, pkey):
+    def validate_soql_query(soql_query: SoqlQuery, pkey: List[str]) -> None:
         missing_keys = soql_query.check_pkey_in_query(pkey)
         if missing_keys:
             raise UserException(f"Private Keys {missing_keys} not in query, Add to SOQL query or check that it exists"
                                 f" in the Salesforce object.")
 
-    def get_salesforce_client(self, params):
+    def get_salesforce_client(self, params: Dict) -> SalesforceClient:
         try:
             return self._login_to_salesforce(params)
         except SalesforceAuthenticationFailed:
             raise UserException("Authentication Failed : recheck your username, password, and security token ")
 
     @retry(SalesforceAuthenticationFailed, tries=3, delay=5)
-    def _login_to_salesforce(self, params):
+    def _login_to_salesforce(self, params: Dict) -> SalesforceClient:
         return SalesforceClient(username=params.get(KEY_USERNAME),
                                 password=params.get(KEY_PASSWORD),
                                 security_token=params.get(KEY_SECURITY_TOKEN),
@@ -132,13 +135,13 @@ class Component(ComponentBase):
                                 API_version=params.get(KEY_API_VERSION, DEFAULT_API_VERSION))
 
     @staticmethod
-    def create_sliced_directory(table_path):
+    def create_sliced_directory(table_path: str) -> None:
         logging.info("Creating sliced file")
         if not path.isdir(table_path):
             mkdir(table_path)
 
     @retry(tries=3, delay=5)
-    def fetch_result(self, salesforce_client, job, batch_id_list):
+    def fetch_result(self, salesforce_client: SalesforceClient, job: str, batch_id_list: List[str]) -> Iterator:
         try:
             for i, result in enumerate(salesforce_client.fetch_batch_results(job, batch_id_list)):
                 logging.info(f"Fetching results of chunk {i + 1}")
@@ -147,7 +150,7 @@ class Component(ComponentBase):
             raise UserException("Invalid Query: Failed to process query. Check syntax, objects, and fields")
 
     @staticmethod
-    def write_results(result, table, index):
+    def write_results(result: Iterator, table: str, index: int) -> List[str]:
         slice_path = path.join(table, str(index))
         fieldnames = []
         with open(slice_path, 'w+', newline='') as out:
@@ -160,14 +163,14 @@ class Component(ComponentBase):
                 logging.info("No records found using SOQL query")
         return fieldnames
 
-    def build_soql_query(self, salesforce_client, params, last_run):
+    def build_soql_query(self, salesforce_client: SalesforceClient, params: Dict, last_run: str) -> SoqlQuery:
         try:
             return self._build_soql_query(salesforce_client, params, last_run)
         except (ValueError, TypeError) as query_error:
             raise UserException(query_error) from query_error
 
     @staticmethod
-    def _build_soql_query(salesforce_client, params, continue_from_value) -> SoqlQuery:
+    def _build_soql_query(salesforce_client: SalesforceClient, params: Dict, last_run: str) -> SoqlQuery:
         loading_options = params.get(KEY_LOADING_OPTIONS, {})
         salesforce_object = params.get(KEY_OBJECT)
         soql_query_string = params.get(KEY_SOQL_QUERY)
@@ -191,8 +194,8 @@ class Component(ComponentBase):
         else:
             raise UserException(f'Either {KEY_SOQL_QUERY} or {KEY_OBJECT} parameters must be specified.')
 
-        if incremental and incremental_fetch and incremental_field and continue_from_value:
-            soql_query.set_query_to_incremental(incremental_field, continue_from_value)
+        if incremental and incremental_fetch and incremental_field and last_run:
+            soql_query.set_query_to_incremental(incremental_field, last_run)
         elif incremental and incremental_fetch and not incremental_field:
             raise UserException("Incremental field is not specified, if you want to use incremental fetching, it must "
                                 "specified.")
@@ -202,18 +205,18 @@ class Component(ComponentBase):
         return soql_query
 
     @staticmethod
-    def normalize_column_names(output_columns):
+    def normalize_column_names(output_columns: List[str]) -> List[str]:
         header_normalizer = get_normalizer(strategy=NormalizerStrategy.DEFAULT, forbidden_sub="_")
         return header_normalizer.normalize_header(output_columns)
 
-    def get_bucket_name(self):
+    def get_bucket_name(self) -> str:
         config_id = self.environment_variables.config_id
         if not config_id:
             config_id = "000000000"
         bucket_name = "".join(["kds-team-ex-salesforce-v2-", config_id])
         return bucket_name
 
-    def run_query(self, salesforce_client, soql_query):
+    def run_query(self, salesforce_client: SalesforceClient, soql_query: SoqlQuery) -> Tuple[str, List[str]]:
         return salesforce_client.run_query(soql_query)
 
 

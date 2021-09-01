@@ -1,24 +1,20 @@
 import logging
 from time import sleep
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urljoin
 
 from retry import retry
+import requests
 from salesforce_bulk import SalesforceBulk
 from salesforce_bulk.salesforce_bulk import BulkBatchFailed
 from salesforce_bulk.salesforce_bulk import DEFAULT_API_VERSION
 from simple_salesforce import SFType
 
-from salesforce.soql_query import SoqlQuery
+from .soql_query import SoqlQuery
 
 NON_SUPPORTED_BULK_FIELD_TYPES = ["address", "location", "base64"]
 CHUNK_SIZE = 100000
 ALLOWED_CHUNKING_OBJECTS = ["account", "campaign", "campaignMember", "case", "contact", "lead", "loginhistory",
                             "opportunity", "task", "user"]
-
-
-# describe object of python client returns field values not supported by bulk api, they must
-# be manually filtered out
-# NON_SUPPORTED_BULK_FIELD_NAMES = ["IndividualId", "IqScore", "StockKeepingUnit", "OutOfOfficeMessage"]
 
 
 class SalesforceClient(SalesforceBulk):
@@ -67,9 +63,44 @@ class SalesforceClient(SalesforceBulk):
 
     def fetch_batch_results(self, job, batch_id_list):
         for batch_id in batch_id_list:
-            for result in self.get_all_results_for_query_batch(batch_id, job, chunk_size=CHUNK_SIZE):
+            for result in self.get_all_results_from_query_batch(batch_id, job):
                 yield result
         self.close_job(job)
+
+    def get_all_results_from_query_batch(self, batch_id, job_id=None, chunk_size=8196):
+        """
+        Gets result ids and generates each result set from the batch and returns it
+        as an generator fetching the next result set when needed
+
+        Args:
+            batch_id: id of batch
+            job_id: id of job, if not provided, it will be looked up
+        """
+        result_ids = self.get_query_batch_result_ids(batch_id, job_id=job_id)
+        if not result_ids:
+            raise RuntimeError('Batch is not complete')
+        for result_id in result_ids:
+            yield self.get_query_batch_result(
+                batch_id,
+                result_id,
+                job_id=job_id,
+                chunk_size=chunk_size
+            )
+
+    def get_query_batch_result(self, batch_id, result_id, job_id=None, chunk_size=8196):
+        job_id = job_id or self.lookup_job_id(batch_id)
+
+        uri = urljoin(
+            self.endpoint + "/",
+            "job/{0}/batch/{1}/result/{2}".format(
+                job_id, batch_id, result_id),
+        )
+
+        resp = requests.get(uri, headers=self.headers(), stream=True)
+        self.check_status(resp)
+
+        iterator = (x.replace(b'\0', b'') for x in resp.iter_lines(chunk_size=chunk_size))
+        return iterator
 
     def build_query_from_string(self, soql_query_string):
         soql_query = SoqlQuery.build_from_query_string(soql_query_string, self.describe_object)

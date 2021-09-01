@@ -82,10 +82,12 @@ class Component(ComponentBase):
                                                  destination=f'{bucket_name}.{soql_query.sf_object}')
 
         self.create_sliced_directory(table.full_path)
+        job, batch_id_list = self.run_query(salesforce_client, soql_query)
         output_columns = []
-        for index, (result, sf_object) in enumerate(self.fetch_result(salesforce_client, soql_query)):
-            logging.info(f"Writing results of chunk {index+1}")
+        for index, result in enumerate(self.fetch_result(salesforce_client, job, batch_id_list)):
+            logging.info(f"Writing results of chunk {index + 1}")
             output_columns = self.write_results(result, table.full_path, index)
+            logging.info(f"Results of chunk {index + 1} written")
             output_columns = self.normalize_column_names(output_columns)
 
         if not output_columns:
@@ -133,12 +135,11 @@ class Component(ComponentBase):
             mkdir(table_path)
 
     @retry(tries=3, delay=5)
-    def fetch_result(self, salesforce_client, soql_query):
-        job, batch_id_list = salesforce_client.run_query(soql_query)
-        sf_object = soql_query.sf_object
+    def fetch_result(self, salesforce_client, job, batch_id_list):
         try:
-            for result in salesforce_client.fetch_batch_results(job, batch_id_list):
-                yield result, sf_object
+            for i, result in enumerate(salesforce_client.fetch_batch_results(job, batch_id_list)):
+                logging.info(f"Fetching results of chunk {i + 1}")
+                yield result
         except BulkBatchFailed:
             raise UserException("Invalid Query: Failed to process query. Check syntax, objects, and fields")
 
@@ -208,6 +209,9 @@ class Component(ComponentBase):
             config_id = "000000000"
         bucket_name = "".join(["kds-team-ex-salesforce-v2-", config_id])
         return bucket_name
+
+    def run_query(self, salesforce_client, soql_query):
+        return salesforce_client.run_query(soql_query)
 
 
 if __name__ == "__main__":

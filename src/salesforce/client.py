@@ -52,22 +52,18 @@ class SalesforceClient(SalesforceBulk):
 
     @retry(tries=3, delay=5)
     def run_query(self, soql_query: SoqlQuery) -> Tuple[str, List[str]]:
-        pk_chunking = False
-        if soql_query.sf_object.lower() in ALLOWED_CHUNKING_OBJECTS:
-            pk_chunking = CHUNK_SIZE
 
-        job = self.create_queryall_job(soql_query.sf_object, contentType='CSV', concurrency='Parallel',
-                                       pk_chunking=pk_chunking)
-        self.query(job, soql_query.query)
+        job = self.create_queryall_job(soql_query.sf_object, contentType='CSV', concurrency='Parallel')
+        batch = self.query(job, soql_query.query)
         logging.info(f"Running SOQL : {soql_query.query}")
         try:
-            while not self.job_status(job)['numberBatchesTotal'] == self.job_status(job)['numberBatchesCompleted']:
+            while not self.is_batch_done(batch):
                 sleep(10)
         except BulkBatchFailed as batch_fail:
             logging.exception(batch_fail.state_message)
         logging.info("SOQL ran successfully, fetching results")
-        batch_id_list = [batch['id'] for batch in self.get_batch_list(job) if batch['state'] == 'Completed']
-        return job, batch_id_list
+        batch_result = self.get_all_results_from_query_batch(batch)
+        return batch_result
 
     def fetch_batch_results(self, job: str, batch_id_list: List[str]) -> Iterator:
         for batch_id in batch_id_list:

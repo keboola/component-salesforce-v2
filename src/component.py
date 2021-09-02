@@ -88,12 +88,12 @@ class Component(ComponentBase):
                                                  destination=f'{bucket_name}.{soql_query.sf_object}')
 
         self.create_sliced_directory(table.full_path)
-        job, batch_id_list = self.run_query(salesforce_client, soql_query)
+        batch_results = self.run_query(salesforce_client, soql_query)
         output_columns = []
-        for index, result in enumerate(self.fetch_result(salesforce_client, job, batch_id_list)):
-            logging.info(f"Writing results of chunk {index + 1}")
+        for index, result in enumerate(self.fetch_result(batch_results)):
+            logging.info("Writing results")
             output_columns = self.write_results(result, table.full_path, index)
-            logging.info(f"Results of chunk {index + 1} written")
+            logging.info("Results written")
             output_columns = self.normalize_column_names(output_columns)
 
         if not output_columns:
@@ -141,10 +141,9 @@ class Component(ComponentBase):
             mkdir(table_path)
 
     @retry(tries=3, delay=5)
-    def fetch_result(self, salesforce_client: SalesforceClient, job: str, batch_id_list: List[str]) -> Iterator:
+    def fetch_result(self, batch_results: Iterator) -> Iterator:
         try:
-            for i, result in enumerate(salesforce_client.fetch_batch_results(job, batch_id_list)):
-                logging.info(f"Fetching results of chunk {i + 1}")
+            for i, result in enumerate(batch_results):
                 yield result
         except BulkBatchFailed:
             raise UserException("Invalid Query: Failed to process query. Check syntax, objects, and fields")

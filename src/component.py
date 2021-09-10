@@ -20,7 +20,6 @@ from salesforce.soql_query import SoqlQuery
 from typing import List
 from typing import Dict
 from typing import Iterator
-from typing import Tuple
 
 # default as previous versions of this component ex-salesforce-v2 had 40.0
 DEFAULT_API_VERSION = "42.0"
@@ -215,7 +214,8 @@ class Component(ComponentBase):
         bucket_name = "".join(["kds-team-ex-salesforce-v2-", config_id])
         return bucket_name
 
-    def run_query(self, salesforce_client: SalesforceClient, soql_query: SoqlQuery) -> Tuple[str, List[str]]:
+    @staticmethod
+    def run_query(salesforce_client: SalesforceClient, soql_query: SoqlQuery) -> Iterator:
         return salesforce_client.run_query(soql_query)
 
 

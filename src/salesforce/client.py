@@ -12,15 +12,12 @@ from simple_salesforce import SFType
 from collections import OrderedDict
 from .soql_query import SoqlQuery
 from typing import List
-from typing import Tuple
 from typing import Any
 from typing import Optional
 from typing import Iterator
 
 NON_SUPPORTED_BULK_FIELD_TYPES = ["address", "location", "base64"]
 CHUNK_SIZE = 100000
-ALLOWED_CHUNKING_OBJECTS = ["account", "campaign", "campaignMember", "case", "contact", "lead", "loginhistory",
-                            "opportunity", "task", "user"]
 
 
 class SalesforceClient(SalesforceBulk):
@@ -51,8 +48,7 @@ class SalesforceClient(SalesforceBulk):
         return True
 
     @retry(tries=3, delay=5)
-    def run_query(self, soql_query: SoqlQuery) -> Tuple[str, List[str]]:
-
+    def run_query(self, soql_query: SoqlQuery) -> Iterator:
         job = self.create_queryall_job(soql_query.sf_object, contentType='CSV', concurrency='Parallel')
         batch = self.query(job, soql_query.query)
         logging.info(f"Running SOQL : {soql_query.query}")

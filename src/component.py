@@ -60,6 +60,7 @@ class Component(ComponentBase):
         loading_options = params.get(KEY_LOADING_OPTIONS, {})
 
         bucket_name = params.get(KEY_BUCKET_NAME, self.get_bucket_name())
+        bucket_name = f"in.c-{bucket_name}"
 
         last_run = self.get_state_file().get("last_run")
         if not last_run:
@@ -211,7 +212,7 @@ class Component(ComponentBase):
         config_id = self.environment_variables.config_id
         if not config_id:
             config_id = "000000000"
-        bucket_name = "".join(["kds-team-ex-salesforce-v2-", config_id])
+        bucket_name = f"kds-team-ex-salesforce-v2-{config_id}"
         return bucket_name
 
     @staticmethod

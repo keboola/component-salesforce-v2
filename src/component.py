@@ -6,6 +6,7 @@ import csv
 import logging
 from datetime import datetime
 from os import path, mkdir
+import shutil
 
 import unicodecsv
 from keboola.component.base import ComponentBase, UserException
@@ -60,6 +61,7 @@ class Component(ComponentBase):
         loading_options = params.get(KEY_LOADING_OPTIONS, {})
 
         bucket_name = params.get(KEY_BUCKET_NAME, self.get_bucket_name())
+        bucket_name = f"in.c-{bucket_name}"
 
         last_run = self.get_state_file().get("last_run")
         if not last_run:
@@ -96,15 +98,20 @@ class Component(ComponentBase):
             output_columns = self.normalize_column_names(output_columns)
 
         if not output_columns:
-            output_columns = prev_output_columns
+            if prev_output_columns:
+                output_columns = prev_output_columns
+            elif params.get(KEY_QUERY_TYPE) == "Object":
+                output_columns = soql_query.sf_object_fields
 
         table.columns = output_columns
 
-        self.write_tabledef_manifest(table)
-
-        soql_timestamp = str(datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S.000Z'))
-        self.write_state_file({"last_run": soql_timestamp,
-                               "prev_output_columns": output_columns})
+        if output_columns:
+            self.write_tabledef_manifest(table)
+            soql_timestamp = str(datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S.000Z'))
+            self.write_state_file({"last_run": soql_timestamp,
+                                   "prev_output_columns": output_columns})
+        else:
+            shutil.rmtree(table.full_path)
 
     @staticmethod
     def validate_incremental_settings(incremental: bool, pkey: List[str]) -> None:
@@ -176,7 +183,7 @@ class Component(ComponentBase):
         incremental_field = loading_options.get(KEY_LOADING_OPTIONS_INCREMENTAL_FIELD)
         incremental_fetch = loading_options.get(KEY_LOADING_OPTIONS_INCREMENTAL_FETCH)
         is_deleted = params.get(KEY_IS_DELETED, False)
-        query_type = params.get(KEY_QUERY_TYPE, DEFAULT_API_VERSION)
+        query_type = params.get(KEY_QUERY_TYPE)
 
         if query_type == "Custom SOQL":
             try:
@@ -211,7 +218,7 @@ class Component(ComponentBase):
         config_id = self.environment_variables.config_id
         if not config_id:
             config_id = "000000000"
-        bucket_name = "".join(["kds-team-ex-salesforce-v2-", config_id])
+        bucket_name = f"kds-team-ex-salesforce-v2-{config_id}"
         return bucket_name
 
     @staticmethod

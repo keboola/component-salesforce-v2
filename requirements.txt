@@ -1,6 +1,6 @@
 mock~=4.0.3
 freezegun~=1.1.0
-keboola.component
+keboola.component==1.2.0
 keboola.utils
 salesforce_bulk
 unicodecsv~=0.14.1

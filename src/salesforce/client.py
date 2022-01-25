@@ -6,6 +6,7 @@ from retry import retry
 import requests
 from salesforce_bulk import SalesforceBulk
 from salesforce_bulk.salesforce_bulk import BulkBatchFailed
+from simple_salesforce.exceptions import SalesforceExpiredSession
 from salesforce_bulk.salesforce_bulk import DEFAULT_API_VERSION
 from simple_salesforce import SFType
 
@@ -18,6 +19,10 @@ from typing import Iterator
 
 NON_SUPPORTED_BULK_FIELD_TYPES = ["address", "location", "base64"]
 CHUNK_SIZE = 100000
+
+
+class SalesforceClientException(Exception):
+    pass
 
 
 class SalesforceClient(SalesforceBulk):
@@ -57,6 +62,9 @@ class SalesforceClient(SalesforceBulk):
                 sleep(10)
         except BulkBatchFailed as batch_fail:
             logging.exception(batch_fail.state_message)
+        except SalesforceExpiredSession as expired_error:
+            raise SalesforceClientException(expired_error) from expired_error
+
         logging.info("SOQL ran successfully, fetching results")
         batch_result = self.get_all_results_from_query_batch(batch)
         return batch_result
@@ -105,10 +113,16 @@ class SalesforceClient(SalesforceBulk):
         return iterator
 
     def build_query_from_string(self, soql_query_string: str) -> SoqlQuery:
-        soql_query = SoqlQuery.build_from_query_string(soql_query_string, self.describe_object)
+        try:
+            soql_query = SoqlQuery.build_from_query_string(soql_query_string, self.describe_object)
+        except SalesforceExpiredSession as expired_error:
+            raise SalesforceClientException(expired_error) from expired_error
         return soql_query
 
     def build_soql_query_from_object_name(self, sf_object: str) -> SoqlQuery:
         sf_object = sf_object.strip()
-        soql_query = SoqlQuery.build_from_object(sf_object, self.describe_object)
+        try:
+            soql_query = SoqlQuery.build_from_object(sf_object, self.describe_object)
+        except SalesforceExpiredSession as expired_error:
+            raise SalesforceClientException(expired_error) from expired_error
         return soql_query

@@ -16,7 +16,7 @@ from salesforce_bulk.salesforce_bulk import BulkBatchFailed
 from simple_salesforce.exceptions import SalesforceAuthenticationFailed
 from simple_salesforce.exceptions import SalesforceResourceNotFound
 
-from salesforce.client import SalesforceClient
+from salesforce.client import SalesforceClient, SalesforceClientException
 from salesforce.soql_query import SoqlQuery
 from typing import List
 from typing import Dict
@@ -189,13 +189,17 @@ class Component(ComponentBase):
             try:
                 soql_query = salesforce_client.build_query_from_string(soql_query_string)
             except SalesforceResourceNotFound as salesforce_error:
-                raise UserException(f"Custom SOQL could not be built : {salesforce_error}")
+                raise UserException(f"Custom SOQL could not be built : {salesforce_error}") from salesforce_error
+            except SalesforceClientException as salesforce_error:
+                raise UserException(salesforce_error) from salesforce_error
         elif query_type == "Object":
             try:
                 soql_query = salesforce_client.build_soql_query_from_object_name(salesforce_object)
-            except SalesforceResourceNotFound:
+            except SalesforceResourceNotFound as salesforce_error:
                 raise UserException(f"Object type {salesforce_object} does not exist in Salesforce, "
-                                    f"enter a valid object")
+                                    f"enter a valid object") from salesforce_error
+            except SalesforceClientException as salesforce_error:
+                raise UserException(salesforce_error) from salesforce_error
         else:
             raise UserException(f'Either {KEY_SOQL_QUERY} or {KEY_OBJECT} parameters must be specified.')
 
@@ -223,7 +227,10 @@ class Component(ComponentBase):
 
     @staticmethod
     def run_query(salesforce_client: SalesforceClient, soql_query: SoqlQuery) -> Iterator:
-        return salesforce_client.run_query(soql_query)
+        try:
+            return salesforce_client.run_query(soql_query)
+        except SalesforceClientException as sf_exc:
+            raise UserException(sf_exc)
 
 
 if __name__ == "__main__":

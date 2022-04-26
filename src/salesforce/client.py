@@ -89,13 +89,18 @@ class SalesforceClient(SalesforceBulk):
         if not result_ids:
             raise RuntimeError('Batch is not complete')
         for result_id in result_ids:
-            yield self.get_query_batch_result(
-                batch_id,
-                result_id,
-                job_id=job_id,
-                chunk_size=chunk_size
-            )
+            try:
+                yield self.get_query_batch_result(
+                    batch_id,
+                    result_id,
+                    job_id=job_id,
+                    chunk_size=chunk_size
+                )
+            except ConnectionError as conn_err:
+                raise SalesforceClientException(
+                    "Failed to get batch as salesforce aborted the connection") from conn_err
 
+    @retry(tries=3, delay=10)
     def get_query_batch_result(self, batch_id: str, result_id: str, job_id: str = None,
                                chunk_size: int = 8196) -> Iterator:
         job_id = job_id or self.lookup_job_id(batch_id)

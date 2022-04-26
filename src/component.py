@@ -151,8 +151,11 @@ class Component(ComponentBase):
         try:
             for i, result in enumerate(batch_results):
                 yield result
-        except BulkBatchFailed:
-            raise UserException("Invalid Query: Failed to process query. Check syntax, objects, and fields")
+        except BulkBatchFailed as bulk_err:
+            raise UserException(
+                "Invalid Query: Failed to process query. Check syntax, objects, and fields") from bulk_err
+        except SalesforceClientException as sf_err:
+            raise UserException() from sf_err
 
     @staticmethod
     def write_results(result: Iterator, table: str, index: int) -> List[str]:

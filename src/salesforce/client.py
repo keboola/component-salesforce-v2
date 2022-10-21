@@ -39,7 +39,7 @@ class SalesforceClient(SalesforceBulk):
         self.api_version = API_version
         self.host = urlparse(self.endpoint).hostname
 
-    @retry(ConnectionError, tries=3, delay=5)
+    @retry(ConnectionError, tries=5, delay=5)
     def describe_object(self, sf_object: str) -> List[str]:
         salesforce_type = SFType(sf_object, self.sessionId, self.host, sf_version=self.api_version)
         object_desc = salesforce_type.describe()
@@ -54,7 +54,7 @@ class SalesforceClient(SalesforceBulk):
             return False
         return True
 
-    @retry(tries=3, delay=5)
+    @retry(ConnectionError, tries=5, delay=5)
     def run_query(self, soql_query: SoqlQuery) -> Iterator:
         job = self.create_queryall_job(soql_query.sf_object, contentType='CSV', concurrency='Parallel')
         batch = self.query(job, soql_query.query)
@@ -77,6 +77,7 @@ class SalesforceClient(SalesforceBulk):
                 yield result
         self.close_job(job)
 
+    @retry(ConnectionError, tries=5, delay=5)
     def get_all_results_from_query_batch(self, batch_id: str, job_id: str = None, chunk_size: int = 8196) -> Iterator:
         """
         Gets result ids and generates each result set from the batch and returns it
@@ -102,7 +103,7 @@ class SalesforceClient(SalesforceBulk):
                 raise SalesforceClientException(
                     "Failed to get batch as salesforce aborted the connection") from conn_err
 
-    @retry(ConnectionError, tries=3, delay=10)
+    @retry(ConnectionError, tries=5, delay=10)
     def get_query_batch_result(self, batch_id: str, result_id: str, job_id: str = None,
                                chunk_size: int = 8196) -> Iterator:
         job_id = job_id or self.lookup_job_id(batch_id)

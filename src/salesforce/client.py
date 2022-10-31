@@ -39,13 +39,11 @@ class SalesforceClient(SalesforceBulk):
         self.api_version = API_version
         self.host = urlparse(self.endpoint).hostname
 
-    @retry(ConnectionError, tries=5, delay=5)
+    @retry(ConnectionError, tries=3, delay=5)
     def describe_object(self, sf_object: str) -> List[str]:
         salesforce_type = SFType(sf_object, self.sessionId, self.host, sf_version=self.api_version)
         object_desc = salesforce_type.describe()
-
         field_names = [field['name'] for field in object_desc['fields'] if self.is_bulk_supported_field(field)]
-
         return field_names
 
     @staticmethod
@@ -54,7 +52,7 @@ class SalesforceClient(SalesforceBulk):
             return False
         return True
 
-    @retry(ConnectionError, tries=5, delay=5)
+    @retry(ConnectionError, tries=3, delay=5)
     def run_query(self, soql_query: SoqlQuery) -> Iterator:
         job = self.create_queryall_job(soql_query.sf_object, contentType='CSV', concurrency='Parallel')
         batch = self.query(job, soql_query.query)

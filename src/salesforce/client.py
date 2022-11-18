@@ -73,6 +73,7 @@ class SalesforceClient(SalesforceBulk):
         return batch_result
 
     def fetch_batch_results(self, job: str, batch_id_list: List[str]) -> Iterator:
+        # TODO: Why is this here?
         for batch_id in batch_id_list:
             for result in self.get_all_results_from_query_batch(batch_id, job):
                 yield result

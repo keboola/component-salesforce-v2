@@ -56,7 +56,7 @@ class SalesforceClient(SalesforceBulk):
             return False
         return True
 
-    @backoff.on_exception(backoff.expo, SalesforceExpiredSession, max_tries=3, on_giveup=_giveup)
+    @backoff.on_exception(backoff.expo, (SalesforceExpiredSession, ConnectionError), max_tries=3, on_giveup=_giveup)
     def run_query(self, soql_query: SoqlQuery) -> Iterator:
         job = self.create_queryall_job(soql_query.sf_object, contentType='CSV', concurrency='Parallel')
         batch = self.query(job, soql_query.query)

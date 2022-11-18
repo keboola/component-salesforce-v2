@@ -2,7 +2,7 @@ import logging
 from time import sleep
 from urllib.parse import urlparse, urljoin
 
-from retry import retry
+import backoff
 import requests
 from salesforce_bulk import SalesforceBulk
 from salesforce_bulk.salesforce_bulk import BulkBatchFailed
@@ -25,6 +25,10 @@ class SalesforceClientException(Exception):
     pass
 
 
+def _giveup(e):
+    raise SalesforceClientException(e)
+
+
 class SalesforceClient(SalesforceBulk):
     def __init__(self, sessionId: Optional[Any] = None, host: Optional[Any] = None, username: str = None,
                  password: str = None,
@@ -39,15 +43,10 @@ class SalesforceClient(SalesforceBulk):
         self.api_version = API_version
         self.host = urlparse(self.endpoint).hostname
 
-    @retry(ConnectionError, tries=3, delay=5)
+    @backoff.on_exception(backoff.expo, ConnectionError, max_tries=3, on_giveup=_giveup)
     def describe_object(self, sf_object: str) -> List[str]:
         salesforce_type = SFType(sf_object, self.sessionId, self.host, sf_version=self.api_version)
-
-        try:
-            object_desc = salesforce_type.describe()
-        except ConnectionError as e:
-            raise SalesforceClientException(f"Cannot get Salesforce object description, error: {e}") from e
-
+        object_desc = salesforce_type.describe()
         field_names = [field['name'] for field in object_desc['fields'] if self.is_bulk_supported_field(field)]
         return field_names
 
@@ -57,7 +56,7 @@ class SalesforceClient(SalesforceBulk):
             return False
         return True
 
-    @retry(ConnectionError, tries=3, delay=5)
+    @backoff.on_exception(backoff.expo, SalesforceExpiredSession, max_tries=3, on_giveup=_giveup)
     def run_query(self, soql_query: SoqlQuery) -> Iterator:
         job = self.create_queryall_job(soql_query.sf_object, contentType='CSV', concurrency='Parallel')
         batch = self.query(job, soql_query.query)
@@ -68,8 +67,6 @@ class SalesforceClient(SalesforceBulk):
                 sleep(10)
         except BulkBatchFailed as batch_fail:
             logging.exception(batch_fail.state_message)
-        except SalesforceExpiredSession as expired_error:
-            raise SalesforceClientException(expired_error) from expired_error
 
         logging.info("SOQL ran successfully, fetching results")
         batch_result = self.get_all_results_from_query_batch(batch)
@@ -81,7 +78,7 @@ class SalesforceClient(SalesforceBulk):
                 yield result
         self.close_job(job)
 
-    @retry(ConnectionError, tries=5, delay=5)
+    @backoff.on_exception(backoff.expo, ConnectionError, max_tries=5, on_giveup=_giveup)
     def get_all_results_from_query_batch(self, batch_id: str, job_id: str = None, chunk_size: int = 8196) -> Iterator:
         """
         Gets result ids and generates each result set from the batch and returns it
@@ -96,18 +93,14 @@ class SalesforceClient(SalesforceBulk):
         if not result_ids:
             raise RuntimeError('Batch is not complete')
         for result_id in result_ids:
-            try:
-                yield self.get_query_batch_result(
-                    batch_id,
-                    result_id,
-                    job_id=job_id,
-                    chunk_size=chunk_size
-                )
-            except ConnectionError as conn_err:
-                raise SalesforceClientException(
-                    "Failed to get batch as salesforce aborted the connection") from conn_err
+            yield self.get_query_batch_result(
+                batch_id,
+                result_id,
+                job_id=job_id,
+                chunk_size=chunk_size
+            )
 
-    @retry(ConnectionError, tries=3, delay=10)
+    @backoff.on_exception(backoff.expo, ConnectionError, max_tries=3, on_giveup=_giveup)
     def get_query_batch_result(self, batch_id: str, result_id: str, job_id: str = None,
                                chunk_size: int = 8196) -> Iterator:
         job_id = job_id or self.lookup_job_id(batch_id)
@@ -117,10 +110,7 @@ class SalesforceClient(SalesforceBulk):
                 job_id, batch_id, result_id),
         )
 
-        try:
-            resp = requests.get(uri, headers=self.headers(), stream=True)
-        except ConnectionError as e:
-            raise SalesforceClientException(f"Cannot get query batch results, error: {e}") from e
+        resp = requests.get(uri, headers=self.headers(), stream=True)
 
         self.check_status(resp)
         iterator = (x.replace(b'\0', b'') for x in resp.iter_lines(chunk_size=chunk_size))

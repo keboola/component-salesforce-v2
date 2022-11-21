@@ -194,7 +194,8 @@ class Component(ComponentBase):
             except SalesforceResourceNotFound as salesforce_error:
                 raise UserException(f"Custom SOQL could not be built : {salesforce_error}") from salesforce_error
             except SalesforceClientException as salesforce_error:
-                raise UserException(salesforce_error) from salesforce_error
+                raise UserException(f"Cannot get Salesforce object description, error: {salesforce_error}")\
+                    from salesforce_error
         elif query_type == "Object":
             try:
                 soql_query = salesforce_client.build_soql_query_from_object_name(salesforce_object)

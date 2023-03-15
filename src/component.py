@@ -1,7 +1,3 @@
-'''
-Template Component main class.
-
-'''
 import csv
 import logging
 from datetime import datetime
@@ -9,12 +5,13 @@ from os import path, mkdir
 import shutil
 
 import unicodecsv
-from keboola.component.base import ComponentBase, UserException
+from keboola.component.base import ComponentBase, sync_action
+from keboola.component.exceptions import UserException
 from keboola.utils.header_normalizer import get_normalizer, NormalizerStrategy
 from retry import retry
 from salesforce_bulk.salesforce_bulk import BulkBatchFailed
 from simple_salesforce.exceptions import SalesforceAuthenticationFailed
-from simple_salesforce.exceptions import SalesforceResourceNotFound
+from simple_salesforce.exceptions import SalesforceResourceNotFound, SalesforceError
 
 from salesforce.client import SalesforceClient, SalesforceClientException
 from salesforce.soql_query import SoqlQuery
@@ -53,10 +50,11 @@ REQUIRED_IMAGE_PARS = []
 
 class Component(ComponentBase):
     def __init__(self):
-        super().__init__(required_parameters=REQUIRED_PARAMETERS,
-                         required_image_parameters=REQUIRED_IMAGE_PARS)
+        super().__init__()
 
     def run(self):
+        self.validate_configuration_parameters(REQUIRED_PARAMETERS)
+        self.validate_image_parameters(REQUIRED_IMAGE_PARS)
         params = self.configuration.parameters
         loading_options = params.get(KEY_LOADING_OPTIONS, {})
 
@@ -106,7 +104,7 @@ class Component(ComponentBase):
         table.columns = output_columns
 
         if output_columns:
-            self.write_tabledef_manifest(table)
+            self.write_manifest(table)
             soql_timestamp = str(datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S.000Z'))
             self.write_state_file({"last_run": soql_timestamp,
                                    "prev_output_columns": output_columns})
@@ -194,7 +192,7 @@ class Component(ComponentBase):
             except SalesforceResourceNotFound as salesforce_error:
                 raise UserException(f"Custom SOQL could not be built : {salesforce_error}") from salesforce_error
             except SalesforceClientException as salesforce_error:
-                raise UserException(f"Cannot get Salesforce object description, error: {salesforce_error}")\
+                raise UserException(f"Cannot get Salesforce object description, error: {salesforce_error}") \
                     from salesforce_error
         elif query_type == "Object":
             try:
@@ -229,18 +227,117 @@ class Component(ComponentBase):
         bucket_name = f"kds-team-ex-salesforce-v2-{config_id}"
         return bucket_name
 
+    @sync_action('loadObjects')
+    def load_possible_objects(self) -> List[Dict]:
+        """
+        Finds all possible objects in Salesforce that can be fetched by the Bulk API
+
+        Returns: a List of dictionaries containing 'name' and 'value' of the SF object, where 'name' is the Label name/
+        readable name of the object, and 'value' is the name of the object you can use to query the object
+
+        """
+        params = self.configuration.parameters
+        salesforce_client = self.get_salesforce_client(params)
+        return salesforce_client.get_bulk_fetchable_objects()
+
+    @sync_action("loadPossibleIncrementalField")
+    def load_possible_incremental_field(self) -> List[Dict]:
+        """
+        Gets all possible fields of a Salesforce object. It determines the name of the SF object either from the input
+        object name or from the SOQL query. This data is used to select an incremental field
+
+        Returns: a List of dictionaries containing 'name' and 'value' of each field of the SF object,
+        where 'name' is the Label name/ readable name of the field, and 'value' is the exact name of the field that can
+        be used in an SOQL query
+
+        """
+        params = self.configuration.parameters
+        if params.get(KEY_QUERY_TYPE) == "Custom SOQL":
+            object_name = self._get_object_name_from_custom_query()
+        else:
+            object_name = params.get(KEY_OBJECT)
+        return self._get_object_fields_names_and_values(object_name)
+
+    @sync_action("loadPossiblePrimaryKeys")
+    def load_possible_primary_keys(self) -> List[Dict]:
+        """
+        Gets all possible primary keys of the data returned of a saleforce object. If the exact object is specified,
+        each field is returned, if a query is specified, it is run with LIMIT 1 and the returned data is analyzed to
+        determine the fieldnames of the final table.
+
+        Returns: a List of dictionaries containing 'name' and 'value' of each field of the SF object or each field that
+        is returned by a custom SOQL query. 'name' is the Label name/ readable name of the field,
+        and 'value' is the name of the field in storage
+
+        """
+        params = self.configuration.parameters
+        if params.get(KEY_QUERY_TYPE) == "Custom SOQL":
+            return self._get_object_fields_from_query()
+        elif params.get(KEY_QUERY_TYPE) == "Object":
+            object_name = params.get(KEY_OBJECT)
+            return self._get_object_fields_names_and_values(object_name)
+        else:
+            raise UserException(f"Invalid {KEY_QUERY_TYPE}")
+
+    def _get_object_name_from_custom_query(self) -> str:
+        params = self.configuration.parameters
+        salesforce_client = self.get_salesforce_client(params)
+        query = self.build_soql_query(salesforce_client, params, None)
+        return query.sf_object
+
+    def _get_object_fields_names_and_values(self, object_name: str) -> List[Dict]:
+        columns = self._get_fields_of_object_by_name(object_name)
+        column_values = self.normalize_column_names(columns)
+        return [{'name': column, 'value': column_values[i]} for i, column in enumerate(columns)]
+
+    def _get_fields_of_object_by_name(self, object_name: str) -> List[str]:
+        params = self.configuration.parameters
+        salesforce_client = self.get_salesforce_client(params)
+        return salesforce_client.describe_object(object_name)
+
+    def _get_object_fields_from_query(self) -> List[Dict]:
+        result = self._get_first_result_from_custom_soql()
+
+        if not result:
+            raise UserException("Failed to determine fields from SOQL query, "
+                                "make sure the SOQL query is valid and that it returns data.")
+
+        columns = list(result.keys())
+        if "attributes" in columns:
+            columns.remove("attributes")
+        column_values = self.normalize_column_names(columns)
+
+        return [{'name': column, 'value': column_values[i]} for i, column in enumerate(columns)]
+
+    def _get_first_result_from_custom_soql(self) -> Dict:
+        params = self.configuration.parameters
+        salesforce_client = self.get_salesforce_client(params)
+        query = params.get(KEY_SOQL_QUERY)
+        if " limit " not in query.lower():
+            query = f"{query} LIMIT 1"
+        else:
+            # LIMIT statement should always come at the end
+            limit_location = query.lower().find(" limit ")
+            query = f"{query[:limit_location]} LIMIT 1"
+        try:
+            result = salesforce_client.simple_client.query(query)
+        except SalesforceError as e:
+            raise UserException("Failed to determine fields from SOQL query, make sure the SOQL query is valid") from e
+
+        return result.get("records")[0] if result.get("totalSize") == 1 else None
+
     @staticmethod
     def run_query(salesforce_client: SalesforceClient, soql_query: SoqlQuery) -> Iterator:
         try:
             return salesforce_client.run_query(soql_query)
         except SalesforceClientException as sf_exc:
-            raise UserException(sf_exc)
+            raise UserException(sf_exc) from sf_exc
 
 
 if __name__ == "__main__":
     try:
         comp = Component()
-        comp.run()
+        comp.execute_action()
     except UserException as exc:
         logging.exception(exc)
         exit(1)

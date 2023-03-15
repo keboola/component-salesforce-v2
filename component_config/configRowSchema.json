@@ -21,15 +21,21 @@
       "options": {
         "dependencies": {
           "query_type_selector": "Object"
+        },
+        "async": {
+          "label": "Re-load Objects",
+          "action": "loadObjects"
         }
       },
+      "enum": [],
+      "format": "select",
       "description": "Salesforce object identifier, eg. Contact",
       "propertyOrder": 2
     },
     "soql_query": {
       "title": "SOQL Query",
       "type": "string",
-	  "format": "textarea",
+      "format": "textarea",
       "options": {
         "dependencies": {
           "query_type_selector": "Custom SOQL"
@@ -57,26 +63,39 @@
         "incremental_field": {
           "type": "string",
           "title": "Incremental Field",
-          "default": "LastModifiedDate",
           "description": "Salesforce object field to use for incremental fetching, eg. LastModifiedDate for most Salesforce objects or CreatedDate for Salesforce History objects",
           "propertyOrder": 300,
           "options": {
             "dependencies": {
               "incremental": 1,
               "incremental_fetch": true
+            },
+            "async": {
+              "label": "Re-load Fields",
+              "action": "loadPossibleIncrementalField"
             }
-          }
+          },
+          "enum": [],
+          "format": "select"
         },
         "pkey": {
           "type": "array",
           "items": {
-            "type": "string",
-            "title": "Primary key column"
+            "enum": [],
+            "type": "string"
           },
           "default": [
             "Id"
           ],
+          "format": "select",
           "title": "Primary key",
+          "options": {
+            "async": {
+              "label": "Re-load Fields",
+              "action": "loadPossiblePrimaryKeys"
+            }
+          },
+          "uniqueItems": true,
           "propertyOrder": 5000
         },
         "incremental_fetch": {

@@ -163,5 +163,5 @@ class SalesforceClient(SalesforceBulk):
         # queryable by the Bulk API. This list might not be exact, and some edge-cases might have to be addressed.
         for sf_object in all_s_objects:
             if sf_object.get('queryable') and not sf_object.get('name') in OBJECTS_NOT_SUPPORTED_BY_BULK:
-                to_fetch.append({"name": sf_object.get('label'), 'value': sf_object.get('name')})
+                to_fetch.append({"label": sf_object.get('label'), 'value': sf_object.get('name')})
         return to_fetch

@@ -275,7 +275,7 @@ class Component(ComponentBase):
             return self._get_object_fields_from_query()
         elif params.get(KEY_QUERY_TYPE) == "Object":
             object_name = params.get(KEY_OBJECT)
-            return self._get_object_fields_names_and_values(object_name)
+            return self._get_object_fields_names_and_normalized_values(object_name)
         else:
             raise UserException(f"Invalid {KEY_QUERY_TYPE}")
 
@@ -285,10 +285,14 @@ class Component(ComponentBase):
         query = self.build_soql_query(salesforce_client, params, None)
         return query.sf_object
 
-    def _get_object_fields_names_and_values(self, object_name: str) -> List[Dict]:
+    def _get_object_fields_names_and_normalized_values(self, object_name: str) -> List[Dict]:
         columns = self._get_fields_of_object_by_name(object_name)
         column_values = self.normalize_column_names(columns)
-        return [{'name': column, 'value': column_values[i]} for i, column in enumerate(columns)]
+        return [{'label': column, 'value': column_values[i]} for i, column in enumerate(columns)]
+
+    def _get_object_fields_names_and_values(self, object_name: str) -> List[Dict]:
+        columns = self._get_fields_of_object_by_name(object_name)
+        return [{'label': column, 'value': column} for column in columns]
 
     def _get_fields_of_object_by_name(self, object_name: str) -> List[str]:
         params = self.configuration.parameters
@@ -307,7 +311,7 @@ class Component(ComponentBase):
             columns.remove("attributes")
         column_values = self.normalize_column_names(columns)
 
-        return [{'name': column, 'value': column_values[i]} for i, column in enumerate(columns)]
+        return [{'label': column, 'value': column_values[i]} for i, column in enumerate(columns)]
 
     def _get_first_result_from_custom_soql(self) -> Dict:
         params = self.configuration.parameters

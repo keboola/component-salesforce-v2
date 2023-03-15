@@ -262,6 +262,15 @@ class Component(ComponentBase):
         except BulkApiError as sf_exc:
             raise UserException(sf_exc) from sf_exc
 
+    @sync_action('testConnection')
+    def test_connection(self):
+        """
+        Tries to log into Salesforce, raises user exception if login params ar incorrect
+
+        """
+        params = self.configuration.parameters
+        self.get_salesforce_client(params)
+
     @sync_action('loadObjects')
     def load_possible_objects(self) -> List[Dict]:
         """

@@ -85,8 +85,13 @@
         "57.0"
       ],
       "default": "57.0",
-      "description" : "Specify the version of API you want to extract data from",
+      "description": "Specify the version of API you want to extract data from",
       "propertyOrder": 1
+    },
+    "test_connection": {
+      "type": "button",
+      "format": "test-connection",
+      "propertyOrder": 50
     }
   }
 }

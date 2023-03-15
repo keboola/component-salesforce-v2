@@ -5,11 +5,13 @@ from os import path, mkdir
 import shutil
 
 import unicodecsv
+from datetime import timezone
 from keboola.component.base import ComponentBase, sync_action
 from keboola.component.exceptions import UserException
 from keboola.utils.header_normalizer import get_normalizer, NormalizerStrategy
 from retry import retry
 from salesforce_bulk.salesforce_bulk import BulkBatchFailed
+from salesforce_bulk.salesforce_bulk import BulkApiError
 from simple_salesforce.exceptions import SalesforceAuthenticationFailed
 from simple_salesforce.exceptions import SalesforceResourceNotFound, SalesforceError
 
@@ -31,6 +33,10 @@ KEY_OBJECT = "object"
 KEY_QUERY_TYPE = "query_type_selector"
 KEY_SOQL_QUERY = "soql_query"
 KEY_IS_DELETED = "is_deleted"
+
+KEY_ADVANCED_FETCHING_OPTIONS = "advanced_fetching_options"
+KEY_FETCH_IN_CHUNKS = "fetch_in_chunks"
+KEY_CHUNK_SIZE = "chunk_size"
 
 KEY_BUCKET_NAME = "bucket_name"
 
@@ -55,6 +61,9 @@ class Component(ComponentBase):
     def run(self):
         self.validate_configuration_parameters(REQUIRED_PARAMETERS)
         self.validate_image_parameters(REQUIRED_IMAGE_PARS)
+
+        start_run_time = str(datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S.000Z'))
+
         params = self.configuration.parameters
         loading_options = params.get(KEY_LOADING_OPTIONS, {})
 
@@ -87,13 +96,21 @@ class Component(ComponentBase):
                                                  destination=f'{bucket_name}.{soql_query.sf_object}')
 
         self.create_sliced_directory(table.full_path)
-        batch_results = self.run_query(salesforce_client, soql_query)
+
+        advanced_fetching_options = params.get(KEY_ADVANCED_FETCHING_OPTIONS, {})
+        fetch_in_chunks = advanced_fetching_options.get(KEY_FETCH_IN_CHUNKS, False)
         output_columns = []
-        for index, result in enumerate(self.fetch_result(batch_results)):
-            logging.info("Writing results")
-            output_columns = self.write_results(result, table.full_path, index)
-            logging.info("Results written")
-            output_columns = self.normalize_column_names(output_columns)
+
+        if fetch_in_chunks:
+            job_id, batch_ids = self.run_chunked_query(salesforce_client, soql_query)
+            for index, result in enumerate(self.fetch_chunked_result(salesforce_client, job_id, batch_ids)):
+                output_columns = self.write_results(result, table.full_path, index)
+                output_columns = self.normalize_column_names(output_columns)
+        else:
+            batch_results = self.run_query(salesforce_client, soql_query)
+            for index, result in enumerate(self.fetch_result(batch_results)):
+                output_columns = self.write_results(result, table.full_path, index)
+                output_columns = self.normalize_column_names(output_columns)
 
         if not output_columns:
             if prev_output_columns:
@@ -105,8 +122,7 @@ class Component(ComponentBase):
 
         if output_columns:
             self.write_manifest(table)
-            soql_timestamp = str(datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S.000Z'))
-            self.write_state_file({"last_run": soql_timestamp,
+            self.write_state_file({"last_run": start_run_time,
                                    "prev_output_columns": output_columns})
         else:
             shutil.rmtree(table.full_path)
@@ -127,16 +143,18 @@ class Component(ComponentBase):
     def get_salesforce_client(self, params: Dict) -> SalesforceClient:
         try:
             return self._login_to_salesforce(params)
-        except SalesforceAuthenticationFailed:
-            raise UserException("Authentication Failed : recheck your username, password, and security token ")
+        except SalesforceAuthenticationFailed as e:
+            raise UserException("Authentication Failed : recheck your username, password, and security token ") from e
 
     @retry(SalesforceAuthenticationFailed, tries=3, delay=5)
     def _login_to_salesforce(self, params: Dict) -> SalesforceClient:
+        advanced_fetching_options = params.get(KEY_ADVANCED_FETCHING_OPTIONS, {})
         return SalesforceClient(username=params.get(KEY_USERNAME),
                                 password=params.get(KEY_PASSWORD),
                                 security_token=params.get(KEY_SECURITY_TOKEN),
                                 sandbox=params.get(KEY_SANDBOX),
-                                API_version=params.get(KEY_API_VERSION, DEFAULT_API_VERSION))
+                                API_version=params.get(KEY_API_VERSION, DEFAULT_API_VERSION),
+                                pk_chunking_size=advanced_fetching_options.get(KEY_CHUNK_SIZE))
 
     @staticmethod
     def create_sliced_directory(table_path: str) -> None:
@@ -145,13 +163,23 @@ class Component(ComponentBase):
             mkdir(table_path)
 
     @retry(tries=3, delay=5)
-    def fetch_result(self, batch_results: Iterator) -> Iterator:
+    def fetch_chunked_result(self, salesforce_client, job_id, batch_ids) -> Iterator:
         try:
-            for i, result in enumerate(batch_results):
-                yield result
+            yield from salesforce_client.fetch_batch_results(job_id, batch_ids)
         except BulkBatchFailed as bulk_err:
             raise UserException(
                 "Invalid Query: Failed to process query. Check syntax, objects, and fields") from bulk_err
+        except SalesforceClientException as sf_err:
+            raise UserException() from sf_err
+
+    @retry(tries=3, delay=5)
+    def fetch_result(self, batch_results: Iterator) -> Iterator:
+        try:
+            yield from batch_results
+        except BulkBatchFailed as bulk_err:
+            raise UserException("Invalid Query: Failed to process query. "
+                                "Check syntax, objects, and fields") from bulk_err
+
         except SalesforceClientException as sf_err:
             raise UserException() from sf_err
 
@@ -165,8 +193,6 @@ class Component(ComponentBase):
                 fieldnames = reader.fieldnames
                 writer = csv.DictWriter(out, fieldnames=reader.fieldnames, lineterminator='\n', delimiter=',')
                 writer.writerows(reader)
-            else:
-                logging.info("No records found using SOQL query")
         return fieldnames
 
     def build_soql_query(self, salesforce_client: SalesforceClient, params: Dict, last_run: str) -> SoqlQuery:
@@ -226,6 +252,15 @@ class Component(ComponentBase):
             config_id = "000000000"
         bucket_name = f"kds-team-ex-salesforce-v2-{config_id}"
         return bucket_name
+
+    @staticmethod
+    def run_chunked_query(salesforce_client: SalesforceClient, soql_query: SoqlQuery) -> Iterator:
+        try:
+            return salesforce_client.run_chunked_query(soql_query)
+        except SalesforceClientException as sf_exc:
+            raise UserException(sf_exc) from sf_exc
+        except BulkApiError as sf_exc:
+            raise UserException(sf_exc) from sf_exc
 
     @sync_action('loadObjects')
     def load_possible_objects(self) -> List[Dict]:

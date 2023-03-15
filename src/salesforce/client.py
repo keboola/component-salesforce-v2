@@ -31,7 +31,7 @@ OBJECTS_NOT_SUPPORTED_BY_BULK = ["AccountFeed", "AssetFeed", "AccountHistory", "
                                  "ServiceAppointmentStatus", "SolutionStatus", "TaskPriority", "TaskStatus",
                                  "TaskWhoRelation", "UserRecordAccess", "WorkOrderLineItemStatus", "WorkOrderStatus"]
 
-CHUNK_SIZE = 100000
+DEFUALT_CHUNK_SIZE = 100000
 
 
 class SalesforceClientException(Exception):
@@ -40,7 +40,7 @@ class SalesforceClientException(Exception):
 
 class SalesforceClient(SalesforceBulk):
     def __init__(self, sessionId: Optional[Any] = None, host: Optional[Any] = None, username: str = None,
-                 password: str = None,
+                 password: str = None, pk_chunking_size=DEFUALT_CHUNK_SIZE,
                  API_version: str = DEFAULT_API_VERSION, sandbox: bool = False,
                  security_token: str = None, organizationId: Optional[Any] = None, client_id: Optional[Any] = None,
                  domain: Optional[Any] = None) -> None:
@@ -54,6 +54,7 @@ class SalesforceClient(SalesforceBulk):
                                         security_token=security_token,
                                         version=API_version)
 
+        self.pk_chunking_size = pk_chunking_size
         self.api_version = API_version
         self.host = urlparse(self.endpoint).hostname
 
@@ -70,9 +71,7 @@ class SalesforceClient(SalesforceBulk):
 
     @staticmethod
     def is_bulk_supported_field(field: OrderedDict) -> bool:
-        if field["type"] in NON_SUPPORTED_BULK_FIELD_TYPES:
-            return False
-        return True
+        return field["type"] not in NON_SUPPORTED_BULK_FIELD_TYPES
 
     @backoff.on_exception(backoff.expo, SalesforceClientException, max_tries=3)
     def run_query(self, soql_query: SoqlQuery) -> Iterator:
@@ -94,11 +93,25 @@ class SalesforceClient(SalesforceBulk):
         batch_result = self.get_all_results_from_query_batch(batch)
         return batch_result
 
+    @backoff.on_exception(backoff.expo, SalesforceClientException, max_tries=3)
+    def run_chunked_query(self, soql_query):
+        job = self.create_queryall_job(soql_query.sf_object, contentType='CSV', concurrency='Parallel',
+                                       pk_chunking=self.pk_chunking_size)
+        self.query(job, soql_query.query)
+        logging.info(f"Running SOQL : {soql_query.query}")
+        try:
+            while self.job_status(job)['numberBatchesTotal'] != self.job_status(job)['numberBatchesCompleted']:
+                sleep(10)
+        except BulkBatchFailed as batch_fail:
+            logging.exception(batch_fail.state_message)
+        logging.info("SOQL ran successfully, fetching results")
+        batch_id_list = [batch['id'] for batch in self.get_batch_list(job) if batch['state'] == 'Completed']
+        return job, batch_id_list
+
     def fetch_batch_results(self, job: str, batch_id_list: List[str]) -> Iterator:
-        # TODO: Why is this here?
-        for batch_id in batch_id_list:
-            for result in self.get_all_results_from_query_batch(batch_id, job):
-                yield result
+        for i, batch_id in enumerate(batch_id_list):
+            logging.info(f"Fetching batch results for batch {i + 1}/{len(batch_id_list)}, id : {batch_id}")
+            yield from self.get_all_results_from_query_batch(batch_id, job)
         self.close_job(job)
 
     def get_all_results_from_query_batch(self, batch_id: str, job_id: str = None, chunk_size: int = 8196) -> Iterator:
@@ -135,7 +148,7 @@ class SalesforceClient(SalesforceBulk):
         try:
             resp = requests.get(uri, headers=self.headers(), stream=True)
         except ConnectionError as e:
-            raise SalesforceClientException("Cannot get query batch results, error: {e}") from e
+            raise SalesforceClientException(f"Cannot get query batch results, error: {e}") from e
 
         self.check_status(resp)
         iterator = (x.replace(b'\0', b'') for x in resp.iter_lines(chunk_size=chunk_size))

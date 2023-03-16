@@ -49,10 +49,12 @@ class SalesforceClient(SalesforceBulk):
                          API_version, sandbox,
                          security_token, organizationId, client_id, domain)
 
-        self.simple_client = Salesforce(username=username,
-                                        password=password,
-                                        security_token=security_token,
-                                        version=API_version)
+        if domain is None and sandbox:
+            domain = 'test'
+
+        self.simple_client = Salesforce(username=username, password=password, security_token=security_token,
+                                        organizationId=organizationId, client_id=client_id,
+                                        domain=domain, version=API_version)
 
         self.pk_chunking_size = pk_chunking_size
         self.api_version = API_version

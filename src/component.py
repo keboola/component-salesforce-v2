@@ -227,7 +227,17 @@ class Component(ComponentBase):
                 raise UserException(f"Object type {salesforce_object} does not exist in Salesforce, "
                                     f"enter a valid object") from salesforce_error
             except SalesforceClientException as salesforce_error:
-                raise UserException(salesforce_error) from salesforce_error
+                error_message = str(salesforce_error)
+                if 'INVALID_OPERATION_WITH_EXPIRED_PASSWORD' in error_message:
+                    custom_message = "Your password has expired. Please reset your password or contact your " \
+                                     "Salesforce Admin to reset the password and use the new one. You can also set " \
+                                     "your Salesforce user for a password that never expires in the Password " \
+                                     "Policies: https://help.salesforce.com/s/articleView?id=sf.admin_password.htm" \
+                                     "&type=5. Please note that when the password is changed, " \
+                                     "a new security token is generated."
+                else:
+                    custom_message = error_message
+                raise UserException(custom_message) from salesforce_error
         else:
             raise UserException(f'Either {KEY_SOQL_QUERY} or {KEY_OBJECT} parameters must be specified.')
 

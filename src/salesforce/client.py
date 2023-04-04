@@ -49,7 +49,8 @@ class SalesforceClient(SalesforceBulk):
 
     @classmethod
     def from_connected_app(cls, username: str, password: str, consumer_key: str, consumer_secret: str, sandbox: str,
-                           api_version: str, pk_chunking_size: int = DEFAULT_CHUNK_SIZE, domain: str = None):
+                           api_version: str = DEFAULT_API_VERSION, pk_chunking_size: int = DEFAULT_CHUNK_SIZE,
+                           domain: str = None):
         domain = 'test' if sandbox else domain
 
         simple_client = Salesforce(username=username, password=password, consumer_secret=consumer_secret,

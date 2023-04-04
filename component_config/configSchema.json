@@ -6,10 +6,26 @@
   "required": [
     "username",
     "#password",
-    "#security_token",
     "api_version"
   ],
   "properties": {
+    "login_method": {
+      "title": "Login Method",
+      "type": "string",
+      "enum": [
+        "security_token",
+        "connected_app"
+      ],
+      "options": {
+        "enum_titles": [
+          "Security Token with Username and Password",
+          "Connected App with Username and Password"
+        ]
+      },
+      "default": "security_token",
+      "description": "Specify the login method you wish to use",
+      "propertyOrder": 1
+    },
     "username": {
       "type": "string",
       "title": "Login Name",
@@ -32,9 +48,37 @@
       "title": "Security token",
       "format": "password",
       "default": "",
-      "minLength": 1,
+      "options": {
+        "dependencies": {
+          "login_method": "security_token"
+        }
+      },
       "description": "Salesforce security token",
       "propertyOrder": 30
+    },
+    "#consumer_key": {
+      "type": "string",
+      "title": "Consumer Key",
+      "format": "password",
+      "options": {
+        "dependencies": {
+          "login_method": "connected_app"
+        }
+      },
+      "description": "Salesforce Connected App Consumer Key",
+      "propertyOrder": 33
+    },
+    "#consumer_secret": {
+      "type": "string",
+      "title": "Consumer Secret",
+      "format": "password",
+      "options": {
+        "dependencies": {
+          "login_method": "connected_app"
+        }
+      },
+      "description": "Salesforce Connected App Consumer Secret",
+      "propertyOrder": 36
     },
     "sandbox": {
       "type": "boolean",
@@ -86,12 +130,12 @@
       ],
       "default": "57.0",
       "description": "Specify the version of API you want to extract data from",
-      "propertyOrder": 1
+      "propertyOrder": 50
     },
     "test_connection": {
       "type": "button",
       "format": "test-connection",
-      "propertyOrder": 50
+      "propertyOrder": 60
     }
   }
 }

@@ -294,6 +294,15 @@ class Component(ComponentBase):
         salesforce_client = self.get_salesforce_client(params)
         return salesforce_client.get_bulk_fetchable_objects()
 
+    @sync_action("loadFields")
+    def load_fields(self) -> List[Dict]:
+        """Returns fields available for selected object."""
+        params = self.configuration.parameters
+        object_name = params.get("object")
+        salesforce_client = self.get_salesforce_client(params)
+        descriptions = salesforce_client.describe_object_w_metadata(object_name)
+        return [{'name': f'{field[0]} - {field[1]}', 'value': field[1]} for field in descriptions]
+
     @sync_action("loadPossibleIncrementalField")
     def load_possible_incremental_field(self) -> List[Dict]:
         """

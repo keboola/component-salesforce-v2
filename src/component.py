@@ -33,6 +33,7 @@ KEY_OBJECT = "object"
 KEY_QUERY_TYPE = "query_type_selector"
 KEY_SOQL_QUERY = "soql_query"
 KEY_IS_DELETED = "is_deleted"
+KEY_FIELDS = 'fields'
 
 KEY_ADVANCED_FETCHING_OPTIONS = "advanced_fetching_options"
 KEY_FETCH_IN_CHUNKS = "fetch_in_chunks"
@@ -211,6 +212,7 @@ class Component(ComponentBase):
         incremental_fetch = loading_options.get(KEY_LOADING_OPTIONS_INCREMENTAL_FETCH)
         is_deleted = params.get(KEY_IS_DELETED, False)
         query_type = params.get(KEY_QUERY_TYPE)
+        fields = params.get(KEY_FIELDS, None)
 
         if query_type == "Custom SOQL":
             try:
@@ -222,7 +224,11 @@ class Component(ComponentBase):
                     from salesforce_error
         elif query_type == "Object":
             try:
-                soql_query = salesforce_client.build_soql_query_from_object_name(salesforce_object)
+                if not fields:
+                    soql_query = salesforce_client.build_soql_query_from_object_name(salesforce_object)
+                else:
+                    logging.info(f"The component will fetch only selected fields: {fields}")
+                    soql_query = salesforce_client.build_soql_query_from_object_name(salesforce_object, fields)
             except SalesforceResourceNotFound as salesforce_error:
                 raise UserException(f"Object type {salesforce_object} does not exist in Salesforce, "
                                     f"enter a valid object") from salesforce_error

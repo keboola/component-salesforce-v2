@@ -16,9 +16,15 @@ class SoqlQuery:
         self.query_type = QueryType(query_type)
         self.check_query(self.query)
 
+    def __str__(self) -> str:
+        return self.query
+
     @classmethod
-    def build_from_object(cls, sf_object: str, describe_object_method: Callable, query_type="get") -> 'SoqlQuery':
+    def build_from_object(cls, sf_object: str, describe_object_method: Callable, query_type="get",
+                          fields: list = None) -> 'SoqlQuery':
         sf_object_fields = describe_object_method(sf_object)
+        if fields:
+            sf_object_fields = set(sf_object_fields).intersection(set(fields))
         query = cls._construct_soql_from_fields(sf_object, sf_object_fields)
         return SoqlQuery(query, sf_object, sf_object_fields, query_type)
 

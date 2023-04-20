@@ -27,6 +27,10 @@
           "action": "loadObjects"
         }
       },
+      "items": {
+          "enum": [],
+          "type": "string"
+        },
       "enum": [],
       "format": "select",
       "description": "Salesforce object identifier, eg. Contact",
@@ -34,7 +38,7 @@
     },
     "fields": {
       "title": "Fields (optional)",
-      "type": "string",
+      "type": "array",
       "options": {
         "dependencies": {
           "query_type_selector": "Object"
@@ -46,7 +50,8 @@
       },
       "enum": [],
       "format": "select",
-      "description": "Salesforce fields to fetch",
+      "description": "Salesforce fields to fetch. If left empty, all fields will be downloaded.",
+      "uniqueItems": true,
       "propertyOrder": 3
     },
     "soql_query": {

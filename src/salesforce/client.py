@@ -175,10 +175,10 @@ class SalesforceClient(SalesforceBulk):
             raise SalesforceClientException(expired_error) from expired_error
         return soql_query
 
-    def build_soql_query_from_object_name(self, sf_object: str) -> SoqlQuery:
+    def build_soql_query_from_object_name(self, sf_object: str, fields: list = None) -> SoqlQuery:
         sf_object = sf_object.strip()
         try:
-            soql_query = SoqlQuery.build_from_object(sf_object, self.describe_object)
+            soql_query = SoqlQuery.build_from_object(sf_object, self.describe_object, fields=fields)
         except SalesforceExpiredSession as expired_error:
             raise SalesforceClientException(expired_error) from expired_error
         return soql_query

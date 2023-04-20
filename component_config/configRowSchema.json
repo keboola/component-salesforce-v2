@@ -32,6 +32,23 @@
       "description": "Salesforce object identifier, eg. Contact",
       "propertyOrder": 2
     },
+    "fields": {
+      "title": "Fields (optional)",
+      "type": "string",
+      "options": {
+        "dependencies": {
+          "query_type_selector": "Object"
+        },
+        "async": {
+          "label": "Load Fields",
+          "action": "loadFields"
+        }
+      },
+      "enum": [],
+      "format": "select",
+      "description": "Salesforce fields to fetch",
+      "propertyOrder": 3
+    },
     "soql_query": {
       "title": "SOQL Query",
       "type": "string",
@@ -42,7 +59,7 @@
         }
       },
       "description": "Specify the SOQL query, eg. SELECT Id, FirstName, LastName FROM Contact. You can easily develop your SOQL code in the <a href='https://workbench.developerforce.com/login.php?startUrl=%2Fquery.php'>Developer Workbench</a>",
-      "propertyOrder": 3
+      "propertyOrder": 4
     },
     "is_deleted": {
       "title": "Get deleted records",
@@ -50,7 +67,7 @@
       "format": "checkbox",
       "default": false,
       "description": "Fetch records that have been deleted",
-      "propertyOrder": 4
+      "propertyOrder": 5
     },
     "advanced_fetching_options": {
       "type": "object",

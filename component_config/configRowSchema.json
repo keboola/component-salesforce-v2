@@ -1,184 +1,200 @@
 {
-  "title": "Query Configuration",
-  "type": "object",
-  "required": [
-    "query_type_selector"
-  ],
-  "properties": {
-    "query_type_selector": {
-      "title": "Query type",
-      "type": "string",
-      "enum": [
-        "Object",
-        "Custom SOQL"
-      ],
-      "default": "Object",
-      "propertyOrder": 1
-    },
-    "object": {
-      "title": "Object Name",
-      "type": "string",
-      "options": {
-        "dependencies": {
-          "query_type_selector": "Object"
-        },
-        "async": {
-          "label": "Re-load Objects",
-          "action": "loadObjects"
-        }
+   "title":"Query Configuration",
+   "type":"object",
+   "required":[
+      "query_type_selector"
+   ],
+   "properties":{
+      "query_type_selector":{
+         "title":"Query type",
+         "type":"string",
+         "enum":[
+            "Object",
+            "Custom SOQL"
+         ],
+         "default":"Object",
+         "propertyOrder":1
       },
-      "items": {
-          "enum": [],
-          "type": "string"
-        },
-      "enum": [],
-      "format": "select",
-      "description": "Salesforce object identifier, eg. Contact",
-      "propertyOrder": 2
-    },
-    "fields": {
-      "title": "Fields (optional)",
-      "type": "array",
-      "options": {
-        "dependencies": {
-          "query_type_selector": "Object"
-        },
-        "async": {
-          "label": "Load Fields",
-          "action": "loadFields"
-        }
-      },
-      "enum": [],
-      "format": "select",
-      "description": "Salesforce fields to fetch. If left empty, all fields will be downloaded.",
-      "uniqueItems": true,
-      "propertyOrder": 3
-    },
-    "soql_query": {
-      "title": "SOQL Query",
-      "type": "string",
-      "format": "textarea",
-      "options": {
-        "dependencies": {
-          "query_type_selector": "Custom SOQL"
-        }
-      },
-      "description": "Specify the SOQL query, eg. SELECT Id, FirstName, LastName FROM Contact. You can easily develop your SOQL code in the <a href='https://workbench.developerforce.com/login.php?startUrl=%2Fquery.php'>Developer Workbench</a>",
-      "propertyOrder": 4
-    },
-    "is_deleted": {
-      "title": "Get deleted records",
-      "type": "boolean",
-      "format": "checkbox",
-      "default": false,
-      "description": "Fetch records that have been deleted",
-      "propertyOrder": 5
-    },
-    "advanced_fetching_options": {
-      "type": "object",
-      "title": "Advanced Fetching Options",
-      "propertyOrder": 50,
-      "properties": {
-        "fetch_in_chunks": {
-          "title": "Fetch Data in chunks",
-          "type": "boolean",
-          "format": "checkbox",
-          "default": false,
-          "description": "If set to true, the object will be fetched in chunks based on primary keys, use for objects that support pk_chunking when data sizes are above 900MB",
-          "propertyOrder": 10
-        },
-        "chunk_size": {
-          "title": "Chunk Size",
-          "type": "integer",
-          "default": 100000,
-          "minimum": 100,
-          "options": {
-            "dependencies": {
-              "fetch_in_chunks": true
-            }
-          },
-          "description" : "Size of chunks for each batch",
-          "propertyOrder": 20
-        }
-      }
-    },
-    "loading_options": {
-      "type": "object",
-      "title": "Loading Options",
-      "propertyOrder": 100,
-      "required": [
-        "incremental"
-      ],
-      "properties": {
-        "incremental_field": {
-          "type": "string",
-          "title": "Incremental Field",
-          "description": "Salesforce object field to use for incremental fetching, eg. LastModifiedDate for most Salesforce objects or CreatedDate for Salesforce History objects",
-          "propertyOrder": 300,
-          "options": {
-            "dependencies": {
-              "incremental": 1,
-              "incremental_fetch": true
+      "object":{
+         "title":"Object Name",
+         "type":"string",
+         "options":{
+            "dependencies":{
+               "query_type_selector":"Object"
             },
-            "async": {
-              "label": "Re-load Fields",
-              "action": "loadPossibleIncrementalField"
+            "async":{
+               "label":"Re-load Objects",
+               "action":"loadObjects"
             }
-          },
-          "enum": [],
-          "format": "select"
-        },
-        "pkey": {
-          "type": "array",
-          "items": {
-            "enum": [],
-            "type": "string"
-          },
-          "default": [
-            "Id"
-          ],
-          "format": "select",
-          "title": "Primary key",
-          "options": {
-            "async": {
-              "label": "Re-load Fields",
-              "action": "loadPossiblePrimaryKeys"
+         },
+         "items":{
+            "enum":[
+
+            ],
+            "type":"string"
+         },
+         "enum":[
+
+         ],
+         "format":"select",
+         "description":"Salesforce object identifier, eg. Contact",
+         "propertyOrder":2
+      },
+      "fields":{
+         "title":"Fields (optional)",
+         "type":"array",
+         "items":{
+            "enum":[
+
+            ],
+            "type":"string"
+         },
+         "options":{
+            "dependencies":{
+               "query_type_selector":"Object"
+            },
+            "async":{
+               "label":"Load Fields",
+               "action":"loadFields"
             }
-          },
-          "uniqueItems": true,
-          "propertyOrder": 5000
-        },
-        "incremental_fetch": {
-          "title": "Incremental fetch",
-          "type": "boolean",
-          "format": "checkbox",
-          "default": false,
-          "description": "Fetch records that have been updated since the last run of the component with a specified field",
-          "propertyOrder": 250,
-          "options": {
-            "dependencies": {
-              "incremental": 1
+         },
+         "enum":[
+
+         ],
+         "format":"select",
+         "description":"Salesforce fields to fetch. If left empty, all fields will be downloaded.",
+         "uniqueItems":true,
+         "propertyOrder":3
+      },
+      "soql_query":{
+         "title":"SOQL Query",
+         "type":"string",
+         "format":"textarea",
+         "options":{
+            "dependencies":{
+               "query_type_selector":"Custom SOQL"
             }
-          }
-        },
-        "incremental": {
-          "type": "integer",
-          "enum": [
-            0,
-            1
-          ],
-          "options": {
-            "enum_titles": [
-              "Full Load",
-              "Incremental Update"
-            ]
-          },
-          "default": 0,
-          "title": "Load type",
-          "description": "If set to Incremental update, the result tables will be updated based on primary key and new records will be fetched. Full load overwrites the destination table each time.",
-          "propertyOrder": 200
-        }
+         },
+         "description":"Specify the SOQL query, eg. SELECT Id, FirstName, LastName FROM Contact. You can easily develop your SOQL code in the <a href='https://workbench.developerforce.com/login.php?startUrl=%2Fquery.php'>Developer Workbench</a>",
+         "propertyOrder":4
+      },
+      "is_deleted":{
+         "title":"Get deleted records",
+         "type":"boolean",
+         "format":"checkbox",
+         "default":false,
+         "description":"Fetch records that have been deleted",
+         "propertyOrder":5
+      },
+      "advanced_fetching_options":{
+         "type":"object",
+         "title":"Advanced Fetching Options",
+         "propertyOrder":50,
+         "properties":{
+            "fetch_in_chunks":{
+               "title":"Fetch Data in chunks",
+               "type":"boolean",
+               "format":"checkbox",
+               "default":false,
+               "description":"If set to true, the object will be fetched in chunks based on primary keys, use for objects that support pk_chunking when data sizes are above 900MB",
+               "propertyOrder":10
+            },
+            "chunk_size":{
+               "title":"Chunk Size",
+               "type":"integer",
+               "default":100000,
+               "minimum":100,
+               "options":{
+                  "dependencies":{
+                     "fetch_in_chunks":true
+                  }
+               },
+               "description":"Size of chunks for each batch",
+               "propertyOrder":20
+            }
+         }
+      },
+      "loading_options":{
+         "type":"object",
+         "title":"Loading Options",
+         "propertyOrder":100,
+         "required":[
+            "incremental"
+         ],
+         "properties":{
+            "incremental_field":{
+               "type":"string",
+               "title":"Incremental Field",
+               "description":"Salesforce object field to use for incremental fetching, eg. LastModifiedDate for most Salesforce objects or CreatedDate for Salesforce History objects",
+               "propertyOrder":300,
+               "options":{
+                  "dependencies":{
+                     "incremental":1,
+                     "incremental_fetch":true
+                  },
+                  "async":{
+                     "label":"Re-load Fields",
+                     "action":"loadPossibleIncrementalField"
+                  }
+               },
+               "enum":[
+
+               ],
+               "format":"select"
+            },
+            "pkey":{
+               "type":"array",
+               "items":{
+                  "enum":[
+
+                  ],
+                  "type":"string"
+               },
+               "default":[
+                  "Id"
+               ],
+               "format":"select",
+               "title":"Primary key",
+               "options":{
+                  "async":{
+                     "label":"Re-load Fields",
+                     "action":"loadPossiblePrimaryKeys"
+                  }
+               },
+               "uniqueItems":true,
+               "propertyOrder":5000
+            },
+            "incremental_fetch":{
+               "title":"Incremental fetch",
+               "type":"boolean",
+               "format":"checkbox",
+               "default":false,
+               "description":"Fetch records that have been updated since the last run of the component with a specified field",
+               "propertyOrder":250,
+               "options":{
+                  "dependencies":{
+                     "incremental":1
+                  }
+               }
+            },
+            "incremental":{
+               "type":"integer",
+               "enum":[
+                  0,
+                  1
+               ],
+               "options":{
+                  "enum_titles":[
+                     "Full Load",
+                     "Incremental Update"
+                  ]
+               },
+               "default":0,
+               "title":"Load type",
+               "description":"If set to Incremental update, the result tables will be updated based on primary key and new records will be fetched. Full load overwrites the destination table each time.",
+               "propertyOrder":200
+            }
+         }
       }
-    }
-  }
+   }
 }

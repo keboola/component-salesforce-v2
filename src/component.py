@@ -1,25 +1,26 @@
 import csv
 import logging
-from datetime import datetime
-from os import path, mkdir
 import shutil
+from datetime import datetime
+from datetime import timezone
+from os import path, mkdir
+from typing import Dict
+from typing import Iterator
+from typing import List
 
 import unicodecsv
-from datetime import timezone
 from keboola.component.base import ComponentBase, sync_action
 from keboola.component.exceptions import UserException
+from keboola.component.sync_actions import SelectElement
 from keboola.utils.header_normalizer import get_normalizer, NormalizerStrategy
 from retry import retry
-from salesforce_bulk.salesforce_bulk import BulkBatchFailed
 from salesforce_bulk.salesforce_bulk import BulkApiError
+from salesforce_bulk.salesforce_bulk import BulkBatchFailed
 from simple_salesforce.exceptions import SalesforceAuthenticationFailed
 from simple_salesforce.exceptions import SalesforceResourceNotFound, SalesforceError
 
 from salesforce.client import SalesforceClient, SalesforceClientException
 from salesforce.soql_query import SoqlQuery
-from typing import List
-from typing import Dict
-from typing import Iterator
 
 # default as previous versions of this component ex-salesforce-v2 had 40.0
 DEFAULT_API_VERSION = "42.0"
@@ -303,16 +304,16 @@ class Component(ComponentBase):
         return salesforce_client.get_bulk_fetchable_objects()
 
     @sync_action("loadFields")
-    def load_fields(self) -> List[Dict]:
+    def load_fields(self) -> List[SelectElement]:
         """Returns fields available for selected object."""
         params = self.configuration.parameters
         object_name = params.get("object")
         salesforce_client = self.get_salesforce_client(params)
         descriptions = salesforce_client.describe_object_w_metadata(object_name)
-        return [{'name': f'{field[0]} - {field[1]}', 'value': field[1]} for field in descriptions]
+        return [SelectElement(label=f'{field[0]} - {field[1]}', value=field[1]) for field in descriptions]
 
     @sync_action("loadPossibleIncrementalField")
-    def load_possible_incremental_field(self) -> List[Dict]:
+    def load_possible_incremental_field(self) -> List[SelectElement]:
         """
         Gets all possible fields of a Salesforce object. It determines the name of the SF object either from the input
         object name or from the SOQL query. This data is used to select an incremental field
@@ -330,7 +331,7 @@ class Component(ComponentBase):
         return self._get_object_fields_names_and_values(object_name)
 
     @sync_action("loadPossiblePrimaryKeys")
-    def load_possible_primary_keys(self) -> List[Dict]:
+    def load_possible_primary_keys(self) -> List[SelectElement]:
         """
         Gets all possible primary keys of the data returned of a saleforce object. If the exact object is specified,
         each field is returned, if a query is specified, it is run with LIMIT 1 and the returned data is analyzed to
@@ -356,21 +357,35 @@ class Component(ComponentBase):
         query = self.build_soql_query(salesforce_client, params, None)
         return query.sf_object
 
-    def _get_object_fields_names_and_normalized_values(self, object_name: str) -> List[Dict]:
+    def _get_object_fields_names_and_normalized_values(self, object_name: str) -> List[SelectElement]:
+        """
+        Return object fields for sync action
+
+        Args:
+            object_name:
+
+        Returns:
+
+        """
         columns = self._get_fields_of_object_by_name(object_name)
         column_values = self.normalize_column_names(columns)
-        return [{'label': column, 'value': column_values[i]} for i, column in enumerate(columns)]
+        return [SelectElement(label=column, value=column_values[i]) for i, column in enumerate(columns)]
 
-    def _get_object_fields_names_and_values(self, object_name: str) -> List[Dict]:
+    def _get_object_fields_names_and_values(self, object_name: str) -> List[SelectElement]:
         columns = self._get_fields_of_object_by_name(object_name)
-        return [{'label': column, 'value': column} for column in columns]
+        return [SelectElement(label=column, value=column) for column in columns]
 
     def _get_fields_of_object_by_name(self, object_name: str) -> List[str]:
         params = self.configuration.parameters
         salesforce_client = self.get_salesforce_client(params)
         return salesforce_client.describe_object(object_name)
 
-    def _get_object_fields_from_query(self) -> List[Dict]:
+    def _get_object_fields_from_query(self) -> List[SelectElement]:
+        """
+        Return object fields for sync action
+        Returns:
+
+        """
         result = self._get_first_result_from_custom_soql()
 
         if not result:
@@ -382,7 +397,7 @@ class Component(ComponentBase):
             columns.remove("attributes")
         column_values = self.normalize_column_names(columns)
 
-        return [{'label': column, 'value': column_values[i]} for i, column in enumerate(columns)]
+        return [SelectElement(label=column, value=column_values[i]) for i, column in enumerate(columns)]
 
     def _get_first_result_from_custom_soql(self) -> Dict:
         params = self.configuration.parameters

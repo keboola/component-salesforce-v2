@@ -225,9 +225,11 @@ class Component(ComponentBase):
         elif query_type == "Object":
             try:
                 if not fields:
+                    logging.info(f"Downloading salesforce object: {salesforce_object}")
                     soql_query = salesforce_client.build_soql_query_from_object_name(salesforce_object)
                 else:
-                    logging.info(f"The component will fetch only selected fields: {fields}")
+                    logging.info(f"Downloading salesforce object {salesforce_object} "
+                                 f"with user selected fields: {fields}")
                     soql_query = salesforce_client.build_soql_query_from_object_name(salesforce_object, fields)
             except SalesforceResourceNotFound as salesforce_error:
                 raise UserException(f"Object type {salesforce_object} does not exist in Salesforce, "

@@ -24,7 +24,7 @@ class SoqlQuery:
                           fields: list = None) -> 'SoqlQuery':
         sf_object_fields = describe_object_method(sf_object)
         if fields:
-            sf_object_fields = set(sf_object_fields).intersection(set(fields))
+            sf_object_fields = [field for field in fields if field in sf_object_fields]
         query = cls._construct_soql_from_fields(sf_object, sf_object_fields)
         return SoqlQuery(query, sf_object, sf_object_fields, query_type)
 

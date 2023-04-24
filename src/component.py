@@ -225,15 +225,12 @@ class Component(ComponentBase):
             except SalesforceClientException as salesforce_error:
                 raise UserException(f"Cannot get Salesforce object description, error: {salesforce_error}") \
                     from salesforce_error
+
         elif query_type == "Object":
             try:
-                if not fields:
-                    logging.info(f"Downloading salesforce object: {salesforce_object}")
-                    soql_query = salesforce_client.build_soql_query_from_object_name(salesforce_object)
-                else:
-                    logging.info(f"Downloading salesforce object {salesforce_object} "
-                                 f"with user selected fields: {fields}")
-                    soql_query = salesforce_client.build_soql_query_from_object_name(salesforce_object, fields)
+                soql_query = salesforce_client.build_soql_query_from_object_name(salesforce_object, fields)
+                logging.info(f"Downloading salesforce object: {salesforce_object}.")
+
             except SalesforceResourceNotFound as salesforce_error:
                 raise UserException(f"Object type {salesforce_object} does not exist in Salesforce, "
                                     f"enter a valid object") from salesforce_error
@@ -293,7 +290,7 @@ class Component(ComponentBase):
         self.get_salesforce_client(params)
 
     @sync_action('loadObjects')
-    def load_possible_objects(self) -> List[Dict]:
+    def load_possible_objects(self) -> List[SelectElement]:
         """
         Finds all possible objects in Salesforce that can be fetched by the Bulk API
 
@@ -303,7 +300,7 @@ class Component(ComponentBase):
         """
         params = self.configuration.parameters
         salesforce_client = self.get_salesforce_client(params)
-        return salesforce_client.get_bulk_fetchable_objects()
+        return [SelectElement(**c) for c in salesforce_client.get_bulk_fetchable_objects()]
 
     @sync_action("loadFields")
     def load_fields(self) -> List[SelectElement]:
@@ -312,7 +309,7 @@ class Component(ComponentBase):
         object_name = params.get("object")
         salesforce_client = self.get_salesforce_client(params)
         descriptions = salesforce_client.describe_object_w_metadata(object_name)
-        return [SelectElement(label=f'{field[0]} - {field[1]}', value=field[1]) for field in descriptions]
+        return [SelectElement(label=f'{field[0]} ({field[1]})', value=field[0]) for field in descriptions]
 
     @sync_action("loadPossibleIncrementalField")
     def load_possible_incremental_field(self) -> List[SelectElement]:

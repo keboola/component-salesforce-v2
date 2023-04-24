@@ -290,7 +290,7 @@ class Component(ComponentBase):
         self.get_salesforce_client(params)
 
     @sync_action('loadObjects')
-    def load_possible_objects(self) -> List[Dict]:
+    def load_possible_objects(self) -> List[SelectElement]:
         """
         Finds all possible objects in Salesforce that can be fetched by the Bulk API
 
@@ -300,7 +300,7 @@ class Component(ComponentBase):
         """
         params = self.configuration.parameters
         salesforce_client = self.get_salesforce_client(params)
-        return salesforce_client.get_bulk_fetchable_objects()
+        return [SelectElement(**c) for c in salesforce_client.get_bulk_fetchable_objects()]
 
     @sync_action("loadFields")
     def load_fields(self) -> List[SelectElement]:

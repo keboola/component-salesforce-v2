@@ -179,6 +179,8 @@ class SalesforceClient(SalesforceBulk):
             soql_query = SoqlQuery.build_from_object(sf_object, self.describe_object, fields=fields)
         except SalesforceExpiredSession as expired_error:
             raise SalesforceClientException(expired_error) from expired_error
+        except ValueError as e:
+            raise SalesforceClientException(e) from e
         return soql_query
 
     def get_bulk_fetchable_objects(self):

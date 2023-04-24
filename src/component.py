@@ -72,11 +72,13 @@ class Component(ComponentBase):
         bucket_name = params.get(KEY_BUCKET_NAME, self.get_bucket_name())
         bucket_name = f"in.c-{bucket_name}"
 
-        last_run = self.get_state_file().get("last_run")
+        statefile = self.get_state_file()
+
+        last_run = statefile.get("last_run")
         if not last_run:
             last_run = str(datetime(2000, 1, 1).strftime('%Y-%m-%dT%H:%M:%S.000Z'))
 
-        prev_output_columns = self.get_state_file().get("prev_output_columns")
+        prev_output_columns = statefile.get("prev_output_columns")
 
         pkey = loading_options.get(KEY_LOADING_OPTIONS_PKEY, [])
         incremental = loading_options.get(KEY_LOADING_OPTIONS_INCREMENTAL, False)

@@ -16,9 +16,20 @@ class SoqlQuery:
         self.query_type = QueryType(query_type)
         self.check_query(self.query)
 
+    def __str__(self) -> str:
+        return self.query
+
     @classmethod
-    def build_from_object(cls, sf_object: str, describe_object_method: Callable, query_type="get") -> 'SoqlQuery':
+    def build_from_object(cls, sf_object: str, describe_object_method: Callable, query_type="get",
+                          fields: list = None) -> 'SoqlQuery':
         sf_object_fields = describe_object_method(sf_object)
+        if fields:
+            invalid_fields = [field for field in fields if field not in sf_object_fields]
+            if invalid_fields:
+                raise ValueError(
+                    f"The following field(s) are not available for the '{sf_object}' "
+                    f"object: {', '.join(invalid_fields)}")
+            sf_object_fields = [field for field in fields if field in sf_object_fields]
         query = cls._construct_soql_from_fields(sf_object, sf_object_fields)
         return SoqlQuery(query, sf_object, sf_object_fields, query_type)
 

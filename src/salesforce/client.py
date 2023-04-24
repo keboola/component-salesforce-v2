@@ -12,10 +12,8 @@ from simple_salesforce import SFType, Salesforce
 
 from collections import OrderedDict
 from .soql_query import SoqlQuery
-from typing import List
-from typing import Any
-from typing import Optional
-from typing import Iterator
+from typing import List, Tuple, Any, Optional, Iterator
+
 
 NON_SUPPORTED_BULK_FIELD_TYPES = ["address", "location", "base64"]
 
@@ -31,7 +29,7 @@ OBJECTS_NOT_SUPPORTED_BY_BULK = ["AccountFeed", "AssetFeed", "AccountHistory", "
                                  "ServiceAppointmentStatus", "SolutionStatus", "TaskPriority", "TaskStatus",
                                  "TaskWhoRelation", "UserRecordAccess", "WorkOrderLineItemStatus", "WorkOrderStatus"]
 
-DEFUALT_CHUNK_SIZE = 100000
+DEFAULT_CHUNK_SIZE = 100000
 
 
 class SalesforceClientException(Exception):
@@ -40,7 +38,7 @@ class SalesforceClientException(Exception):
 
 class SalesforceClient(SalesforceBulk):
     def __init__(self, sessionId: Optional[Any] = None, host: Optional[Any] = None, username: str = None,
-                 password: str = None, pk_chunking_size=DEFUALT_CHUNK_SIZE,
+                 password: str = None, pk_chunking_size=DEFAULT_CHUNK_SIZE,
                  API_version: str = DEFAULT_API_VERSION, sandbox: bool = False,
                  security_token: str = None, organizationId: Optional[Any] = None, client_id: Optional[Any] = None,
                  domain: Optional[Any] = None) -> None:
@@ -70,6 +68,18 @@ class SalesforceClient(SalesforceBulk):
             raise SalesforceClientException(f"Cannot get SalesForce object description, error: {e}.") from e
 
         return [field['name'] for field in object_desc['fields'] if self.is_bulk_supported_field(field)]
+
+    @backoff.on_exception(backoff.expo, SalesforceClientException, max_tries=3)
+    def describe_object_w_metadata(self, sf_object: str) -> List[Tuple[str, str]]:
+        salesforce_type = SFType(sf_object, self.sessionId, self.host, sf_version=self.api_version)
+
+        try:
+            object_desc = salesforce_type.describe()
+        except ConnectionError as e:
+            raise SalesforceClientException(f"Cannot get SalesForce object description, error: {e}.") from e
+
+        return [(field['name'], field['type']) for field in object_desc['fields']
+                if self.is_bulk_supported_field(field)]
 
     @staticmethod
     def is_bulk_supported_field(field: OrderedDict) -> bool:
@@ -163,12 +173,14 @@ class SalesforceClient(SalesforceBulk):
             raise SalesforceClientException(expired_error) from expired_error
         return soql_query
 
-    def build_soql_query_from_object_name(self, sf_object: str) -> SoqlQuery:
+    def build_soql_query_from_object_name(self, sf_object: str, fields: list = None) -> SoqlQuery:
         sf_object = sf_object.strip()
         try:
-            soql_query = SoqlQuery.build_from_object(sf_object, self.describe_object)
+            soql_query = SoqlQuery.build_from_object(sf_object, self.describe_object, fields=fields)
         except SalesforceExpiredSession as expired_error:
             raise SalesforceClientException(expired_error) from expired_error
+        except ValueError as e:
+            raise SalesforceClientException(e) from e
         return soql_query
 
     def get_bulk_fetchable_objects(self):

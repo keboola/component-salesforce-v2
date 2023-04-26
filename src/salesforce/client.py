@@ -12,7 +12,7 @@ from simple_salesforce import SFType, Salesforce
 
 from collections import OrderedDict
 from .soql_query import SoqlQuery
-from typing import List, Tuple, Any, Optional, Iterator
+from typing import List, Tuple, Iterator
 
 
 NON_SUPPORTED_BULK_FIELD_TYPES = ["address", "location", "base64"]
@@ -38,11 +38,12 @@ class SalesforceClientException(Exception):
 
 class SalesforceClient(SalesforceBulk):
     def __init__(self, simple_client: Salesforce, api_version: str, pk_chunking_size: int = DEFAULT_CHUNK_SIZE) -> None:
-
+        # Initialize the client with from_connected_app or from_security_token, this creates a login with the
+        # simple salesforce client. The simple_client sessionId is a Bearer token that is result of the login.
+        super().__init__(sessionId=simple_client.session_id,
+                         host=simple_client.sf_instance,
+                         API_version=api_version)
         self.simple_client = simple_client
-
-        super().__init__(sessionId=simple_client.session_id, host=simple_client.sf_instance, API_version=api_version,
-                         sandbox=False)
         self.pk_chunking_size = pk_chunking_size
         self.api_version = api_version
         self.host = urlparse(self.endpoint).hostname

@@ -172,6 +172,10 @@ class Component(ComponentBase):
         advanced_fetching_options = params.get(KEY_ADVANCED_FETCHING_OPTIONS, {})
 
         if login_method == LoginType.SECURITY_TOKEN_LOGIN:
+            if not params.get(KEY_SECURITY_TOKEN):
+                raise UserException("Missing Required Parameter : Security Token. "
+                                    "It is required when using Security Token Login")
+
             return SalesforceClient.from_security_token(username=params.get(KEY_USERNAME),
                                                         password=params.get(KEY_PASSWORD),
                                                         security_token=params.get(KEY_SECURITY_TOKEN),
@@ -179,6 +183,9 @@ class Component(ComponentBase):
                                                         api_version=params.get(KEY_API_VERSION, DEFAULT_API_VERSION),
                                                         pk_chunking_size=advanced_fetching_options.get(KEY_CHUNK_SIZE))
         elif login_method == LoginType.CONNECTED_APP_LOGIN:
+            if not params.get(KEY_CONSUMER_KEY) or not params.get(KEY_CONSUMER_SECRET):
+                raise UserException("Missing Required Parameter : At least one of Consumer Key and Consumer Secret "
+                                    "are missing.  They are both required when using Connected App Login")
             return SalesforceClient.from_connected_app(username=params.get(KEY_USERNAME),
                                                        password=params.get(KEY_PASSWORD),
                                                        consumer_key=params.get(KEY_CONSUMER_KEY),

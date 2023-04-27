@@ -56,7 +56,7 @@ RECORDS_NOT_FOUND = ['Records not found for this query']
 
 # list of mandatory parameters => if some is missing,
 # component will fail with readable message on initialization.
-REQUIRED_PARAMETERS = [KEY_USERNAME, KEY_PASSWORD, KEY_SECURITY_TOKEN, [KEY_SOQL_QUERY, KEY_OBJECT]]
+REQUIRED_PARAMETERS = [KEY_USERNAME, KEY_PASSWORD, [KEY_SOQL_QUERY, KEY_OBJECT]]
 REQUIRED_IMAGE_PARS = []
 
 DEFAULT_LOGIN_METHOD = "security_token"

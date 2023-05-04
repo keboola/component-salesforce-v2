@@ -129,10 +129,8 @@ class Component(ComponentBase):
         if output_columns:
 
             if params.get(KEY_QUERY_TYPE) == "Object":
-                tm = self.store_column_metadata(salesforce_client, soql_query.sf_object, table)
-                manifest = table.get_manifest_dictionary()
-                manifest["column_metadata"] = tm.get_column_metadata_for_manifest()
-                self.write_manifest(manifest)
+                tm = self.store_table_metadata(salesforce_client, soql_query.sf_object, table)
+                table.table_metadata = tm
 
             self.write_manifest(table)
             self.write_state_file({"last_run": start_run_time,
@@ -140,13 +138,12 @@ class Component(ComponentBase):
         else:
             shutil.rmtree(table.full_path)
 
-
     @staticmethod
-    def store_column_metadata(salesforce_client, sf_object, table):
+    def store_table_metadata(salesforce_client, sf_object, table):
         description = None
         try:
             description = salesforce_client.describe_object_w_metadata(sf_object)
-            formatted_json_string = json.dumps(description, indent=4)
+            # formatted_json_string = json.dumps(description, indent=4)
         except SalesforceClientException as salesforce_error:
             logging.error(f"Cannot fetch metadata for object {sf_object}: {salesforce_error}")
         tm = TableMetadata(table.get_manifest_dictionary())
@@ -157,6 +154,11 @@ class Component(ComponentBase):
                 column_type = item["type"]
 
                 tm.add_column_metadata(column_name, "type", column_type)
+
+            table_md = {k: v for k, v in description.items() if k not in ["childRelationships", "fields"]}
+
+            for key, value in table_md.items():
+                tm.add_table_metadata(key, value)
 
         return tm
 

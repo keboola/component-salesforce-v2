@@ -70,7 +70,7 @@ class SalesforceClient(SalesforceBulk):
         return [field['name'] for field in object_desc['fields'] if self.is_bulk_supported_field(field)]
 
     @backoff.on_exception(backoff.expo, SalesforceClientException, max_tries=3)
-    def describe_object_w_metadata(self, sf_object: str) -> List[Tuple[str, str]]:
+    def describe_object_w_datatype(self, sf_object: str) -> List[Tuple[str, str]]:
         salesforce_type = SFType(sf_object, self.sessionId, self.host, sf_version=self.api_version)
 
         try:
@@ -80,6 +80,17 @@ class SalesforceClient(SalesforceBulk):
 
         return [(field['name'], field['type']) for field in object_desc['fields']
                 if self.is_bulk_supported_field(field)]
+
+    @backoff.on_exception(backoff.expo, SalesforceClientException, max_tries=3)
+    def describe_object_w_metadata(self, sf_object: str) -> OrderedDict[str, Any]:
+        salesforce_type = SFType(sf_object, self.sessionId, self.host, sf_version=self.api_version)
+
+        try:
+            object_desc = salesforce_type.describe()
+        except ConnectionError as e:
+            raise SalesforceClientException(f"Cannot get SalesForce object description, error: {e}.") from e
+
+        return object_desc
 
     @staticmethod
     def is_bulk_supported_field(field: OrderedDict) -> bool:

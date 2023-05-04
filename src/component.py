@@ -4,12 +4,14 @@ import shutil
 from datetime import datetime
 from datetime import timezone
 from os import path, mkdir
+import json
 from typing import Dict
 from typing import Iterator
 from typing import List
 
 import unicodecsv
 from keboola.component.base import ComponentBase, sync_action
+from keboola.component.dao import TableMetadata
 from keboola.component.exceptions import UserException
 from keboola.component.sync_actions import SelectElement
 from keboola.utils.header_normalizer import get_normalizer, NormalizerStrategy
@@ -125,11 +127,38 @@ class Component(ComponentBase):
         table.columns = output_columns
 
         if output_columns:
+
+            if params.get(KEY_QUERY_TYPE) == "Object":
+                tm = self.store_column_metadata(salesforce_client, soql_query.sf_object, table)
+                manifest = table.get_manifest_dictionary()
+                manifest["column_metadata"] = tm.get_column_metadata_for_manifest()
+                self.write_manifest(manifest)
+
             self.write_manifest(table)
             self.write_state_file({"last_run": start_run_time,
                                    "prev_output_columns": output_columns})
         else:
             shutil.rmtree(table.full_path)
+
+
+    @staticmethod
+    def store_column_metadata(salesforce_client, sf_object, table):
+        description = None
+        try:
+            description = salesforce_client.describe_object_w_metadata(sf_object)
+            formatted_json_string = json.dumps(description, indent=4)
+        except SalesforceClientException as salesforce_error:
+            logging.error(f"Cannot fetch metadata for object {sf_object}: {salesforce_error}")
+        tm = TableMetadata(table.get_manifest_dictionary())
+
+        if description:
+            for item in description["fields"]:
+                column_name = item["name"]
+                column_type = item["type"]
+
+                tm.add_column_metadata(column_name, "type", column_type)
+
+        return tm
 
     @staticmethod
     def validate_incremental_settings(incremental: bool, pkey: List[str]) -> None:
@@ -246,6 +275,7 @@ class Component(ComponentBase):
                 else:
                     custom_message = error_message
                 raise UserException(custom_message) from salesforce_error
+
         else:
             raise UserException(f'Either {KEY_SOQL_QUERY} or {KEY_OBJECT} parameters must be specified.')
 
@@ -308,7 +338,7 @@ class Component(ComponentBase):
         params = self.configuration.parameters
         object_name = params.get("object")
         salesforce_client = self.get_salesforce_client(params)
-        descriptions = salesforce_client.describe_object_w_metadata(object_name)
+        descriptions = salesforce_client.describe_object_w_datatype(object_name)
         return [SelectElement(label=f'{field[0]} ({field[1]})', value=field[0]) for field in descriptions]
 
     @sync_action("loadPossibleIncrementalField")

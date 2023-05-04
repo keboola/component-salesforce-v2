@@ -152,7 +152,7 @@ class Component(ComponentBase):
         if description:
             for item in description["fields"]:
 
-                if salesforce_client.is_bulk_supported_field(item["type"]):
+                if salesforce_client.is_bulk_supported_field(item):
                     column_name = str(item["name"])
                     column_type = str(item["type"])
                     nullable = item["nillable"]

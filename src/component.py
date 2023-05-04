@@ -4,6 +4,8 @@ import shutil
 from datetime import datetime
 from datetime import timezone
 from os import path, mkdir
+import json
+
 from typing import Dict
 from typing import Iterator
 from typing import List
@@ -160,7 +162,7 @@ class Component(ComponentBase):
                                         nullable=nullable,
                                         default=default)
 
-                tm.add_column_metadata(column_name, "sf_object", item)
+                tm.add_column_metadata(column_name, "sf_object", json.dumps(item))
 
             table_md = {str(k): str(v) for k, v in description.items() if k not in ["childRelationships", "fields"]}
 

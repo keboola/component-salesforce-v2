@@ -159,6 +159,8 @@ class Component(ComponentBase):
             for key, value in table_md.items():
                 if isinstance(value, list):
                     continue
+                if isinstance(value, dict):
+                    continue
                 tm.add_table_metadata(key, value)
 
         return tm

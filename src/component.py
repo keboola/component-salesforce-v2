@@ -141,7 +141,7 @@ class Component(ComponentBase):
     def store_table_metadata(salesforce_client, sf_object, table):
         description = None
         try:
-            description = salesforce_client.describe_object_w_metadata(sf_object)
+            description = salesforce_client.describe_object_w_complete_metadata(sf_object)
             # formatted_json_string = json.dumps(description, indent=4)
         except SalesforceClientException as salesforce_error:
             logging.error(f"Cannot fetch metadata for object {sf_object}: {salesforce_error}")
@@ -339,7 +339,7 @@ class Component(ComponentBase):
         params = self.configuration.parameters
         object_name = params.get("object")
         salesforce_client = self.get_salesforce_client(params)
-        descriptions = salesforce_client.describe_object_w_datatype(object_name)
+        descriptions = salesforce_client.describe_object_w_metadata(object_name)
         return [SelectElement(label=f'{field[0]} ({field[1]})', value=field[0]) for field in descriptions]
 
     @sync_action("loadPossibleIncrementalField")

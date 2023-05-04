@@ -151,18 +151,20 @@ class Component(ComponentBase):
 
         if description:
             for item in description["fields"]:
-                column_name = str(item["name"])
-                column_type = str(item["type"])
-                nullable = item["nillable"]
-                default = item["defaultValue"]
 
-                tm.add_column_data_type(column=column_name,
-                                        data_type=SupportedDataTypes("STRING"),
-                                        source_data_type=column_type,
-                                        nullable=nullable,
-                                        default=default)
+                if salesforce_client.is_bulk_supported_field(item["type"]):
+                    column_name = str(item["name"])
+                    column_type = str(item["type"])
+                    nullable = item["nillable"]
+                    default = item["defaultValue"]
 
-                tm.add_column_metadata(column_name, "sf_object", json.dumps(item))
+                    tm.add_column_data_type(column=column_name,
+                                            data_type=SupportedDataTypes("STRING"),
+                                            source_data_type=column_type,
+                                            nullable=nullable,
+                                            default=default)
+
+                    tm.add_column_metadata(column_name, "sf_object", json.dumps(item))
 
             table_md = {str(k): str(v) for k, v in description.items() if k not in ["childRelationships", "fields"]}
 

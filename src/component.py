@@ -4,7 +4,6 @@ import shutil
 from datetime import datetime
 from datetime import timezone
 from os import path, mkdir
-import json
 from typing import Dict
 from typing import Iterator
 from typing import List

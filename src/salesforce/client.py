@@ -12,7 +12,7 @@ from simple_salesforce import SFType, Salesforce
 
 from collections import OrderedDict
 from .soql_query import SoqlQuery
-from typing import List, Tuple, Any, Optional, Iterator
+from typing import List, Tuple, Any, Optional, Iterator, Dict
 
 
 NON_SUPPORTED_BULK_FIELD_TYPES = ["address", "location", "base64"]
@@ -82,7 +82,7 @@ class SalesforceClient(SalesforceBulk):
                 if self.is_bulk_supported_field(field)]
 
     @backoff.on_exception(backoff.expo, SalesforceClientException, max_tries=3)
-    def describe_object_w_complete_metadata(self, sf_object: str) -> OrderedDict[str, Any]:
+    def describe_object_w_complete_metadata(self, sf_object: str) -> Dict[str, Any]:
         salesforce_type = SFType(sf_object, self.sessionId, self.host, sf_version=self.api_version)
 
         try:

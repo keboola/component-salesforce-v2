@@ -152,11 +152,16 @@ class Component(ComponentBase):
                 column_name = item["name"]
                 column_type = item["type"]
 
+                if not column_type:
+                    column_type = ""
+
                 tm.add_column_metadata(column_name, "type", column_type)
 
             table_md = {k: v for k, v in description.items() if k not in ["childRelationships", "fields"]}
 
             for key, value in table_md.items():
+                if not value:
+                    value = ""
                 tm.add_table_metadata(key, value)
 
         return tm

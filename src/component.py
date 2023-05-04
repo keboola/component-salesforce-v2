@@ -10,7 +10,7 @@ from typing import List
 
 import unicodecsv
 from keboola.component.base import ComponentBase, sync_action
-from keboola.component.dao import TableMetadata
+from keboola.component.dao import TableMetadata, SupportedDataTypes
 from keboola.component.exceptions import UserException
 from keboola.component.sync_actions import SelectElement
 from keboola.utils.header_normalizer import get_normalizer, NormalizerStrategy
@@ -149,12 +149,20 @@ class Component(ComponentBase):
 
         if description:
             for item in description["fields"]:
-                column_name = item["name"]
-                column_type = item["type"]
+                column_name = str(item["name"])
+                column_type = str(item["type"])
+                nullable = item["nillable"]
+                default = item["defaultValue"]
 
-                tm.add_column_metadata(column_name, "type", column_type)
+                tm.add_column_data_type(column=column_name,
+                                        data_type=SupportedDataTypes("STRING"),
+                                        source_data_type=column_type,
+                                        nullable=nullable,
+                                        default=default)
 
-            table_md = {k: v for k, v in description.items() if k not in ["childRelationships", "fields"]}
+                tm.add_column_metadata(column_name, "sf_object", item)
+
+            table_md = {str(k): str(v) for k, v in description.items() if k not in ["childRelationships", "fields"]}
 
             for key, value in table_md.items():
                 if isinstance(value, list):

@@ -200,7 +200,9 @@ class Component(ComponentBase):
             'email': 'STRING',
             'date': 'DATE',
             'datetime': 'TIMESTAMP',
-            'url': 'STRING'
+            'url': 'STRING',
+            'int': 'INTEGER',
+            'currency': 'STRING'
         }
 
         if source_type in source_to_snowflake:

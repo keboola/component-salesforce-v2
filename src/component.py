@@ -140,43 +140,74 @@ class Component(ComponentBase):
             shutil.rmtree(table.full_path)
 
     @staticmethod
-    def store_table_metadata(salesforce_client, sf_object, table):
-        description = None
+    def get_description(salesforce_client, sf_object):
         try:
-            description = salesforce_client.describe_object_w_complete_metadata(sf_object)
+            return salesforce_client.describe_object_w_complete_metadata(sf_object)
         except SalesforceClientException as salesforce_error:
             logging.error(f"Cannot fetch metadata for object {sf_object}: {salesforce_error}")
+            return None
+
+    def add_columns_to_table_metadata(self, tm, description, salesforce_client):
+        for item in description["fields"]:
+            if salesforce_client.is_bulk_supported_field(item):
+                column_name = str(item["name"])
+                column_type = str(item["type"])
+                nullable = item["nillable"]
+                default = item["defaultValue"]
+                label = item["label"]
+
+                tm.add_column_data_type(column=column_name,
+                                        data_type=self.convert_to_snowflake_datatype(column_type),
+                                        source_data_type=column_type,
+                                        nullable=nullable,
+                                        default=default)
+
+                tm.add_column_metadata(column_name, "source_metadata", json.dumps(item))
+                tm.add_column_metadata(column_name, "description", label)
+
+    @staticmethod
+    def add_table_metadata(tm, description):
+        table_md = {str(k): str(v) for k, v in description.items() if k not in ["childRelationships", "fields"]}
+
+        for key, value in table_md.items():
+            if isinstance(value, list):
+                continue
+            if isinstance(value, dict):
+                continue
+            tm.add_table_metadata(key, value)
+
+    def store_table_metadata(self, salesforce_client, sf_object, table):
+        description = self.get_description(salesforce_client, sf_object)
         tm = TableMetadata(table.get_manifest_dictionary())
 
         if description:
-            for item in description["fields"]:
-
-                if salesforce_client.is_bulk_supported_field(item):
-                    column_name = str(item["name"])
-                    column_type = str(item["type"])
-                    nullable = item["nillable"]
-                    default = item["defaultValue"]
-                    label = item["label"]
-
-                    tm.add_column_data_type(column=column_name,
-                                            data_type=SupportedDataTypes("STRING"),
-                                            source_data_type=column_type,
-                                            nullable=nullable,
-                                            default=default)
-
-                    tm.add_column_metadata(column_name, "source_metadata", json.dumps(item))
-                    tm.add_column_metadata(column_name, "description", label)
-
-            table_md = {str(k): str(v) for k, v in description.items() if k not in ["childRelationships", "fields"]}
-
-            for key, value in table_md.items():
-                if isinstance(value, list):
-                    continue
-                if isinstance(value, dict):
-                    continue
-                tm.add_table_metadata(key, value)
+            self.add_columns_to_table_metadata(tm, description, salesforce_client)
+            self.add_table_metadata(tm, description)
 
         return tm
+
+    @staticmethod
+    def convert_to_snowflake_datatype(source_type: str) -> str:
+        source_to_snowflake = {
+            'id': 'STRING',
+            'boolean': 'BOOLEAN',
+            'reference': 'STRING',
+            'string': 'STRING',
+            'picklist': 'STRING',
+            'textarea': 'STRING',
+            'double': 'FLOAT',
+            'phone': 'STRING',
+            'email': 'STRING',
+            'date': 'DATE',
+            'datetime': 'TIMESTAMP',
+            'url': 'STRING'
+        }
+
+        if source_type in source_to_snowflake:
+            return SupportedDataTypes[source_to_snowflake[source_type]].value
+        else:
+            logging.error(f"Unsupported source type: {source_type}. Casting it to STRING.")
+            return SupportedDataTypes["STRING"].value
 
     @staticmethod
     def validate_incremental_settings(incremental: bool, pkey: List[str]) -> None:

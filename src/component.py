@@ -144,7 +144,6 @@ class Component(ComponentBase):
         description = None
         try:
             description = salesforce_client.describe_object_w_complete_metadata(sf_object)
-            # formatted_json_string = json.dumps(description, indent=4)
         except SalesforceClientException as salesforce_error:
             logging.error(f"Cannot fetch metadata for object {sf_object}: {salesforce_error}")
         tm = TableMetadata(table.get_manifest_dictionary())
@@ -157,6 +156,7 @@ class Component(ComponentBase):
                     column_type = str(item["type"])
                     nullable = item["nillable"]
                     default = item["defaultValue"]
+                    label = item["label"]
 
                     tm.add_column_data_type(column=column_name,
                                             data_type=SupportedDataTypes("STRING"),
@@ -164,7 +164,8 @@ class Component(ComponentBase):
                                             nullable=nullable,
                                             default=default)
 
-                    tm.add_column_metadata(column_name, "sf_object", json.dumps(item))
+                    tm.add_column_metadata(column_name, "source_metadata", json.dumps(item))
+                    tm.add_column_metadata(column_name, "description", label)
 
             table_md = {str(k): str(v) for k, v in description.items() if k not in ["childRelationships", "fields"]}
 

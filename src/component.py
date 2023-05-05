@@ -171,9 +171,9 @@ class Component(ComponentBase):
 
         for key, value in table_md.items():
             if isinstance(value, list):
-                continue
+                value = json.dumps(value)
             if isinstance(value, dict):
-                continue
+                value = json.dumps(value)
             tm.add_table_metadata(key, value)
 
         tm.add_table_description("test_description")

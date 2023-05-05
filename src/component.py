@@ -184,7 +184,6 @@ class Component(ComponentBase):
 
         if description:
             self.add_columns_to_table_metadata(tm, description, salesforce_client)
-            print(description)
             self.add_table_metadata(tm, description)
 
         return tm

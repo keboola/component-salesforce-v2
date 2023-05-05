@@ -176,12 +176,15 @@ class Component(ComponentBase):
                 continue
             tm.add_table_metadata(key, value)
 
+        tm.add_table_description("test_description")
+
     def store_table_metadata(self, salesforce_client, sf_object, table):
         description = self.get_description(salesforce_client, sf_object)
         tm = TableMetadata(table.get_manifest_dictionary())
 
         if description:
             self.add_columns_to_table_metadata(tm, description, salesforce_client)
+            print(description)
             self.add_table_metadata(tm, description)
 
         return tm

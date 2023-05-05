@@ -163,7 +163,7 @@ class Component(ComponentBase):
                                         default=default)
 
                 tm.add_column_metadata(column_name, "source_metadata", json.dumps(item))
-                tm.add_column_metadata(column_name, "description", label)
+                tm.add_column_descriptions({column_name: label})
 
     @staticmethod
     def add_table_metadata(tm, description):

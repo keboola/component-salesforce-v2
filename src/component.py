@@ -167,7 +167,9 @@ class Component(ComponentBase):
 
     @staticmethod
     def add_table_metadata(tm, description):
-        table_md = {str(k): str(v) for k, v in description.items() if k not in ["childRelationships", "fields"]}
+        test = json.dumps(description)
+        print(test)
+        table_md = {str(k): str(v) for k, v in description.items() if k != "fields"}
 
         for key, value in table_md.items():
             if isinstance(value, list):

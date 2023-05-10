@@ -179,16 +179,15 @@ class Component(ComponentBase):
 
     @staticmethod
     def add_table_metadata(tm, description):
-        def recursive_flatten(prefix, value):
-            if isinstance(value, dict):
-                for k, v in value.items():
+        def recursive_flatten(prefix, nested_value):
+            if isinstance(nested_value, dict):
+                for k, v in nested_value.items():
                     recursive_flatten(f"{prefix}_{k}", v)
-            elif isinstance(value, list):
-                for i, v in enumerate(value):
+            elif isinstance(nested_value, list):
+                for i, v in enumerate(nested_value):
                     recursive_flatten(f"{prefix}_{i}", v)
             else:
-                tm.add_table_metadata(prefix, str(value))
-                print(prefix, str(value))
+                tm.add_table_metadata(prefix, str(nested_value))
 
         table_md = {str(k): v for k, v in description.items() if k != "fields"}
         for key, value in table_md.items():

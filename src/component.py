@@ -5,6 +5,7 @@ from datetime import datetime
 from datetime import timezone
 from os import path, mkdir
 import json
+from collections import OrderedDict
 
 from typing import Dict
 from typing import Iterator
@@ -57,6 +58,17 @@ RECORDS_NOT_FOUND = ['Records not found for this query']
 # component will fail with readable message on initialization.
 REQUIRED_PARAMETERS = [KEY_USERNAME, KEY_PASSWORD, KEY_SECURITY_TOKEN, [KEY_SOQL_QUERY, KEY_OBJECT]]
 REQUIRED_IMAGE_PARS = []
+
+
+def ordereddict_to_dict(value):
+    if isinstance(value, OrderedDict):
+        return {k: ordereddict_to_dict(v) for k, v in value.items()}
+    elif isinstance(value, list):
+        return [ordereddict_to_dict(item) for item in value]
+    elif isinstance(value, dict):
+        return {k: ordereddict_to_dict(v) for k, v in value.items()}
+    else:
+        return value
 
 
 class Component(ComponentBase):
@@ -167,11 +179,10 @@ class Component(ComponentBase):
 
     @staticmethod
     def add_table_metadata(tm, description):
-        test = json.dumps(description)
-        print(test)
         table_md = {str(k): str(v) for k, v in description.items() if k != "fields"}
 
         for key, value in table_md.items():
+            value = ordereddict_to_dict(value)
             if isinstance(value, list):
                 value = json.dumps(value)
             if isinstance(value, dict):

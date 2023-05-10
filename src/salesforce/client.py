@@ -12,7 +12,7 @@ from simple_salesforce import SFType, Salesforce
 
 from collections import OrderedDict
 from .soql_query import SoqlQuery
-from typing import List, Tuple, Any, Optional, Iterator
+from typing import List, Tuple, Iterator
 
 
 NON_SUPPORTED_BULK_FIELD_TYPES = ["address", "location", "base64"]
@@ -37,26 +37,39 @@ class SalesforceClientException(Exception):
 
 
 class SalesforceClient(SalesforceBulk):
-    def __init__(self, sessionId: Optional[Any] = None, host: Optional[Any] = None, username: str = None,
-                 password: str = None, pk_chunking_size=DEFAULT_CHUNK_SIZE,
-                 API_version: str = DEFAULT_API_VERSION, sandbox: bool = False,
-                 security_token: str = None, organizationId: Optional[Any] = None, client_id: Optional[Any] = None,
-                 domain: Optional[Any] = None) -> None:
-
-        super().__init__(sessionId, host, username, password,
-                         API_version, sandbox,
-                         security_token, organizationId, client_id, domain)
-
-        if domain is None and sandbox:
-            domain = 'test'
-
-        self.simple_client = Salesforce(username=username, password=password, security_token=security_token,
-                                        organizationId=organizationId, client_id=client_id,
-                                        domain=domain, version=API_version)
-
+    def __init__(self, simple_client: Salesforce, api_version: str, pk_chunking_size: int = DEFAULT_CHUNK_SIZE) -> None:
+        # Initialize the client with from_connected_app or from_security_token, this creates a login with the
+        # simple salesforce client. The simple_client sessionId is a Bearer token that is result of the login.
+        super().__init__(sessionId=simple_client.session_id,
+                         host=simple_client.sf_instance,
+                         API_version=api_version)
+        self.simple_client = simple_client
         self.pk_chunking_size = pk_chunking_size
-        self.api_version = API_version
+        self.api_version = api_version
         self.host = urlparse(self.endpoint).hostname
+
+    @classmethod
+    def from_connected_app(cls, username: str, password: str, consumer_key: str, consumer_secret: str, sandbox: str,
+                           api_version: str = DEFAULT_API_VERSION, pk_chunking_size: int = DEFAULT_CHUNK_SIZE,
+                           domain: str = None):
+        domain = 'test' if sandbox else domain
+
+        simple_client = Salesforce(username=username, password=password, consumer_secret=consumer_secret,
+                                   consumer_key=consumer_key,
+                                   domain=domain, version=api_version)
+
+        return cls(simple_client=simple_client, api_version=api_version, pk_chunking_size=pk_chunking_size)
+
+    @classmethod
+    def from_security_token(cls, username: str, password: str, security_token: str, sandbox: str, api_version: str,
+                            pk_chunking_size: int = DEFAULT_CHUNK_SIZE,
+                            domain: str = None):
+
+        domain = 'test' if sandbox else domain
+        simple_client = Salesforce(username=username, password=password, security_token=security_token,
+                                   domain=domain, version=api_version)
+
+        return cls(simple_client=simple_client, api_version=api_version, pk_chunking_size=pk_chunking_size)
 
     @backoff.on_exception(backoff.expo, SalesforceClientException, max_tries=3)
     def describe_object(self, sf_object: str) -> List[str]:

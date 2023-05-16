@@ -194,7 +194,8 @@ class Component(ComponentBase):
             value = ordereddict_to_dict(value)
             recursive_flatten(key, value)
 
-        tm.add_table_description("test_description")
+        # TO BE IMPLEMENTED IN KCOFAC-2110
+        # tm.add_table_description("test_description")
 
     def store_table_metadata(self, salesforce_client, sf_object, table):
         description = self.get_description(salesforce_client, sf_object)

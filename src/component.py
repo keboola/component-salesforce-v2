@@ -7,6 +7,7 @@ from os import path, mkdir
 import json
 from collections import OrderedDict
 
+from enum import Enum
 from typing import Dict
 from typing import Iterator
 from typing import List
@@ -29,6 +30,9 @@ from salesforce.soql_query import SoqlQuery
 # default as previous versions of this component ex-salesforce-v2 had 40.0
 DEFAULT_API_VERSION = "42.0"
 
+KEY_LOGIN_METHOD = "login_method"
+KEY_CONSUMER_KEY = "#consumer_key"
+KEY_CONSUMER_SECRET = "#consumer_secret"
 KEY_USERNAME = "username"
 KEY_PASSWORD = "#password"
 KEY_SECURITY_TOKEN = "#security_token"
@@ -56,8 +60,19 @@ RECORDS_NOT_FOUND = ['Records not found for this query']
 
 # list of mandatory parameters => if some is missing,
 # component will fail with readable message on initialization.
-REQUIRED_PARAMETERS = [KEY_USERNAME, KEY_PASSWORD, KEY_SECURITY_TOKEN, [KEY_SOQL_QUERY, KEY_OBJECT]]
+REQUIRED_PARAMETERS = [KEY_USERNAME, KEY_PASSWORD, [KEY_SOQL_QUERY, KEY_OBJECT]]
 REQUIRED_IMAGE_PARS = []
+
+DEFAULT_LOGIN_METHOD = "security_token"
+
+
+class LoginType(str, Enum):
+    SECURITY_TOKEN_LOGIN = "security_token"
+    CONNECTED_APP_LOGIN = "connected_app"
+
+    @classmethod
+    def list(cls):
+        return list(map(lambda c: c.value, cls))
 
 
 def ordereddict_to_dict(value):
@@ -249,17 +264,44 @@ class Component(ComponentBase):
         try:
             return self._login_to_salesforce(params)
         except SalesforceAuthenticationFailed as e:
-            raise UserException("Authentication Failed : recheck your username, password, and security token ") from e
+            raise UserException(f"Authentication Failed : recheck your authorization parameters : {e}") from e
 
     @retry(SalesforceAuthenticationFailed, tries=3, delay=5)
     def _login_to_salesforce(self, params: Dict) -> SalesforceClient:
+        login_method = self._get_login_method()
+
         advanced_fetching_options = params.get(KEY_ADVANCED_FETCHING_OPTIONS, {})
-        return SalesforceClient(username=params.get(KEY_USERNAME),
-                                password=params.get(KEY_PASSWORD),
-                                security_token=params.get(KEY_SECURITY_TOKEN),
-                                sandbox=params.get(KEY_SANDBOX),
-                                API_version=params.get(KEY_API_VERSION, DEFAULT_API_VERSION),
-                                pk_chunking_size=advanced_fetching_options.get(KEY_CHUNK_SIZE))
+
+        if login_method == LoginType.SECURITY_TOKEN_LOGIN:
+            if not params.get(KEY_SECURITY_TOKEN):
+                raise UserException("Missing Required Parameter : Security Token. "
+                                    "It is required when using Security Token Login")
+
+            return SalesforceClient.from_security_token(username=params.get(KEY_USERNAME),
+                                                        password=params.get(KEY_PASSWORD),
+                                                        security_token=params.get(KEY_SECURITY_TOKEN),
+                                                        sandbox=params.get(KEY_SANDBOX),
+                                                        api_version=params.get(KEY_API_VERSION, DEFAULT_API_VERSION),
+                                                        pk_chunking_size=advanced_fetching_options.get(KEY_CHUNK_SIZE))
+        elif login_method == LoginType.CONNECTED_APP_LOGIN:
+            if not params.get(KEY_CONSUMER_KEY) or not params.get(KEY_CONSUMER_SECRET):
+                raise UserException("Missing Required Parameter : At least one of Consumer Key and Consumer Secret "
+                                    "are missing.  They are both required when using Connected App Login")
+            return SalesforceClient.from_connected_app(username=params.get(KEY_USERNAME),
+                                                       password=params.get(KEY_PASSWORD),
+                                                       consumer_key=params.get(KEY_CONSUMER_KEY),
+                                                       consumer_secret=params.get(KEY_CONSUMER_SECRET),
+                                                       sandbox=params.get(KEY_SANDBOX),
+                                                       api_version=params.get(KEY_API_VERSION, DEFAULT_API_VERSION),
+                                                       pk_chunking_size=advanced_fetching_options.get(KEY_CHUNK_SIZE))
+
+    def _get_login_method(self) -> LoginType:
+        login_type_name = self.configuration.parameters.get(KEY_LOGIN_METHOD, DEFAULT_LOGIN_METHOD)
+        try:
+            return LoginType(login_type_name)
+        except ValueError as val_err:
+            raise UserException(
+                f"'{login_type_name}' is not a valid Login Type. Enter one of : {LoginType.list()}") from val_err
 
     @staticmethod
     def create_sliced_directory(table_path: str) -> None:

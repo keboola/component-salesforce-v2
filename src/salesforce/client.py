@@ -12,8 +12,7 @@ from simple_salesforce import SFType, Salesforce
 
 from collections import OrderedDict
 from .soql_query import SoqlQuery
-from typing import List, Tuple, Any, Optional, Iterator, Dict
-from typing import List, Tuple, Iterator
+from typing import List, Tuple, Iterator, Any, Dict
 
 
 NON_SUPPORTED_BULK_FIELD_TYPES = ["address", "location", "base64"]

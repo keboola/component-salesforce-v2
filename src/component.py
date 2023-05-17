@@ -142,7 +142,7 @@ class Component(ComponentBase):
         if output_columns:
 
             if params.get(KEY_QUERY_TYPE) == "Object":
-                tm = self.store_table_metadata(salesforce_client, soql_query.sf_object, table)
+                tm = self._store_table_metadata(salesforce_client, soql_query.sf_object, table)
                 table.table_metadata = tm
 
             self.write_manifest(table)
@@ -159,7 +159,7 @@ class Component(ComponentBase):
             logging.error(f"Cannot fetch metadata for object {sf_object}: {salesforce_error}")
             return None
 
-    def add_columns_to_table_metadata(self, tm, description, salesforce_client):
+    def _add_columns_to_table_metadata(self, tm, description, salesforce_client):
         for item in description["fields"]:
             if salesforce_client.is_bulk_supported_field(item):
                 column_name = str(item["name"])
@@ -197,12 +197,12 @@ class Component(ComponentBase):
         # TO BE IMPLEMENTED IN KCOFAC-2110
         # tm.add_table_description("test_description")
 
-    def store_table_metadata(self, salesforce_client, sf_object, table):
+    def _store_table_metadata(self, salesforce_client, sf_object, table):
         description = self.get_description(salesforce_client, sf_object)
         tm = TableMetadata(table.get_manifest_dictionary())
 
         if description:
-            self.add_columns_to_table_metadata(tm, description, salesforce_client)
+            self._add_columns_to_table_metadata(tm, description, salesforce_client)
             self.add_table_metadata(tm, description)
 
         return tm

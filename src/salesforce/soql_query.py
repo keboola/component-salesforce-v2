@@ -124,4 +124,3 @@ class SoqlQuery:
             self.query = self.query + " LIMIT 1"
         else:
             logging.warning("The SOQL query already contains a LIMIT clause. Ignoring add_limit request.")
-

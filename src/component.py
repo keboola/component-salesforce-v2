@@ -172,7 +172,7 @@ class Component(ComponentBase):
         try:
             _ = salesforce_client.test_query(soql_query)
             return
-        except BulkBatchFailed as e:
+        except SalesforceClientException as e:
             raise UserException(f"Test query failed: {e}") from e
 
     @staticmethod

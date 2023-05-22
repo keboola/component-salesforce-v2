@@ -145,6 +145,7 @@ class SalesforceClient(SalesforceBulk):
         except SalesforceExpiredSession as e:
             raise SalesforceClientException(f"Encountered Expired Session error when running query: {e}") from e
 
+        logging.info("Test query has been successful.")
         return
 
     @backoff.on_exception(backoff.expo, SalesforceClientException, max_tries=3)

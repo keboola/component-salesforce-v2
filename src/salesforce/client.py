@@ -36,6 +36,10 @@ class SalesforceClientException(Exception):
     pass
 
 
+class QueryFailedException(Exception):
+    pass
+
+
 class SalesforceClient(SalesforceBulk):
     def __init__(self, simple_client: Salesforce, api_version: str, pk_chunking_size: int = DEFAULT_CHUNK_SIZE) -> None:
         # Initialize the client with from_connected_app or from_security_token, this creates a login with the
@@ -139,7 +143,7 @@ class SalesforceClient(SalesforceBulk):
             while not self.is_batch_done(batch):
                 sleep(10)
         except BulkBatchFailed as e:
-            raise SalesforceClientException(f"Test query failed: {e.state_message}") from e
+            raise QueryFailedException(f"Test query failed: {e.state_message}") from e
         except ConnectionError as e:
             raise SalesforceClientException(f"Encountered error when running query: {e}") from e
         except SalesforceExpiredSession as e:

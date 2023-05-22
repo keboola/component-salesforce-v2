@@ -23,7 +23,7 @@ from salesforce_bulk.salesforce_bulk import BulkApiError, BulkBatchFailed
 from simple_salesforce.exceptions import SalesforceAuthenticationFailed
 from simple_salesforce.exceptions import SalesforceResourceNotFound, SalesforceError
 
-from salesforce.client import SalesforceClient, SalesforceClientException
+from salesforce.client import SalesforceClient, SalesforceClientException, QueryFailedException
 from salesforce.soql_query import SoqlQuery
 
 # default as previous versions of this component ex-salesforce-v2 had 40.0
@@ -173,6 +173,8 @@ class Component(ComponentBase):
             _ = salesforce_client.test_query(soql_query)
             return
         except SalesforceClientException as e:
+            raise UserException(e) from e
+        except QueryFailedException as e:
             raise UserException(e) from e
 
     @staticmethod

@@ -19,8 +19,7 @@ from keboola.component.exceptions import UserException
 from keboola.component.sync_actions import SelectElement
 from keboola.utils.header_normalizer import get_normalizer, NormalizerStrategy
 from retry import retry
-from salesforce_bulk.salesforce_bulk import BulkApiError
-from salesforce_bulk.salesforce_bulk import BulkBatchFailed
+from salesforce_bulk.salesforce_bulk import BulkApiError, BulkBatchFailed
 from simple_salesforce.exceptions import SalesforceAuthenticationFailed
 from simple_salesforce.exceptions import SalesforceResourceNotFound, SalesforceError
 
@@ -136,6 +135,8 @@ class Component(ComponentBase):
         output_columns = []
 
         if fetch_in_chunks:
+            self.test_query(salesforce_client, soql_query)
+
             job_id, batch_ids = self.run_chunked_query(salesforce_client, soql_query)
             for index, result in enumerate(self.fetch_chunked_result(salesforce_client, job_id, batch_ids)):
                 output_columns = self.write_results(result, table.full_path, index)
@@ -165,6 +166,15 @@ class Component(ComponentBase):
                                    "prev_output_columns": output_columns})
         else:
             shutil.rmtree(table.full_path)
+
+    @staticmethod
+    def test_query(salesforce_client, soql_query):
+        try:
+            _ = salesforce_client.test_query(soql_query)
+            return
+        except BulkBatchFailed as e:
+            raise UserException(f"Test query failed: {e}") from e
+
 
     @staticmethod
     def get_description(salesforce_client, sf_object):

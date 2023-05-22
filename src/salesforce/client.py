@@ -135,6 +135,7 @@ class SalesforceClient(SalesforceBulk):
 
     @backoff.on_exception(backoff.expo, SalesforceClientException, max_tries=3)
     def test_query(self, soql_query: SoqlQuery) -> None:
+        soql_query.add_limit()
         job = self.create_queryall_job(soql_query.sf_object, contentType='CSV', concurrency='Parallel')
         batch = self.query(job, soql_query.query)
         logging.info(f"Running test SOQL : {soql_query.query}")

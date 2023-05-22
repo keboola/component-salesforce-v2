@@ -1,9 +1,10 @@
 import logging
 from time import sleep
 from urllib.parse import urlparse, urljoin
-
+import copy
 import backoff
 import requests
+
 from salesforce_bulk import SalesforceBulk
 from salesforce_bulk.salesforce_bulk import BulkBatchFailed
 from simple_salesforce.exceptions import SalesforceExpiredSession
@@ -135,7 +136,7 @@ class SalesforceClient(SalesforceBulk):
 
     @backoff.on_exception(backoff.expo, SalesforceClientException, max_tries=3)
     def test_query(self, soql_query: SoqlQuery) -> None:
-        test_query = soql_query
+        test_query = copy.deepcopy(soql_query)
         test_query.add_limit()
         job = self.create_queryall_job(test_query.sf_object, contentType='CSV', concurrency='Parallel')
         batch = self.query(job, test_query.query)

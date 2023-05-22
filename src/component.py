@@ -173,7 +173,7 @@ class Component(ComponentBase):
             _ = salesforce_client.test_query(soql_query)
             return
         except SalesforceClientException as e:
-            raise UserException(f"Test query failed: {e}") from e
+            raise UserException(e) from e
 
     @staticmethod
     def get_description(salesforce_client, sf_object):

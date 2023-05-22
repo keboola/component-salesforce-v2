@@ -175,7 +175,6 @@ class Component(ComponentBase):
         except BulkBatchFailed as e:
             raise UserException(f"Test query failed: {e}") from e
 
-
     @staticmethod
     def get_description(salesforce_client, sf_object):
         try:

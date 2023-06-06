@@ -184,7 +184,7 @@ class Component(ComponentBase):
                 label = item["label"]
 
                 tm.add_column_data_type(column=column_name,
-                                        data_type=self.convert_to_snowflake_datatype(column_type),
+                                        data_type=self.convert_to_kbc_basetype(column_type),
                                         source_data_type=column_type,
                                         nullable=nullable,
                                         default=default)
@@ -223,7 +223,7 @@ class Component(ComponentBase):
         return tm
 
     @staticmethod
-    def convert_to_snowflake_datatype(source_type: str) -> str:
+    def convert_to_kbc_basetype(source_type: str) -> str:
         source_to_snowflake = {
             'id': 'STRING',
             'boolean': 'BOOLEAN',

@@ -135,25 +135,23 @@ class SalesforceClient(SalesforceBulk):
         return batch_result
 
     @backoff.on_exception(backoff.expo, SalesforceClientException, max_tries=3)
-    def test_query(self, soql_query: SoqlQuery) -> None:
+    def test_query(self, soql_query: SoqlQuery, add_limit: bool = False) -> None:
         test_query = copy.deepcopy(soql_query)
-        test_query.add_limit()
-        job = self.create_queryall_job(test_query.sf_object, contentType='CSV', concurrency='Parallel')
-        batch = self.query(job, test_query.query)
+        if add_limit:
+            test_query.add_limit()
+
         logging.info(f"Running test SOQL : {test_query.query}")
 
         try:
-            while not self.is_batch_done(batch):
-                sleep(10)
-        except BulkBatchFailed as e:
-            raise QueryFailedException(f"Test query failed: {e.state_message}") from e
+            result = self.simple_client.query(test_query)
         except ConnectionError as e:
             raise SalesforceClientException(f"Encountered error when running query: {e}") from e
         except SalesforceExpiredSession as e:
             raise SalesforceClientException(f"Encountered Expired Session error when running query: {e}") from e
 
         logging.info("Test query has been successful.")
-        return
+
+        return result
 
     @backoff.on_exception(backoff.expo, SalesforceClientException, max_tries=3)
     def run_chunked_query(self, soql_query):

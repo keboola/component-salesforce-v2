@@ -116,11 +116,11 @@ class SoqlQuery:
                 missing_keys.append(pkey)
         return missing_keys
 
-    def add_limit(self) -> None:
+    def add_limit(self, limit: int = 1) -> None:
         """
-        This method adds LIMIT 1 clause to the SOQL query.
+        This method adds LIMIT 10 clause to the SOQL query.
         """
         if "limit" not in self.query.lower():
-            self.query = self.query + " LIMIT 1"
+            self.query = self.query + f" LIMIT {limit}"
         else:
             logging.warning("The SOQL query already contains a LIMIT clause. Ignoring add_limit request.")

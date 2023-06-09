@@ -170,7 +170,7 @@ class Component(ComponentBase):
     @staticmethod
     def test_query(salesforce_client, soql_query):
         try:
-            _ = salesforce_client.test_query(soql_query)
+            _ = salesforce_client.test_query(soql_query=soql_query, add_limit=True)
             return
         except SalesforceClientException as e:
             raise UserException(e) from e

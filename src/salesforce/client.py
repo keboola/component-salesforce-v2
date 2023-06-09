@@ -37,10 +37,6 @@ class SalesforceClientException(Exception):
     pass
 
 
-class QueryFailedException(Exception):
-    pass
-
-
 class SalesforceClient(SalesforceBulk):
     def __init__(self, simple_client: Salesforce, api_version: str, pk_chunking_size: int = DEFAULT_CHUNK_SIZE) -> None:
         # Initialize the client with from_connected_app or from_security_token, this creates a login with the

@@ -4,6 +4,9 @@ import shutil
 from datetime import datetime
 from datetime import timezone
 from os import path, mkdir
+import json
+from collections import OrderedDict
+
 from enum import Enum
 from typing import Dict
 from typing import Iterator
@@ -11,6 +14,7 @@ from typing import List
 
 import unicodecsv
 from keboola.component.base import ComponentBase, sync_action
+from keboola.component.dao import TableMetadata, SupportedDataTypes
 from keboola.component.exceptions import UserException
 from keboola.component.sync_actions import SelectElement
 from keboola.utils.header_normalizer import get_normalizer, NormalizerStrategy
@@ -69,6 +73,17 @@ class LoginType(str, Enum):
     @classmethod
     def list(cls):
         return list(map(lambda c: c.value, cls))
+
+
+def ordereddict_to_dict(value):
+    if isinstance(value, OrderedDict):
+        return {k: ordereddict_to_dict(v) for k, v in value.items()}
+    elif isinstance(value, list):
+        return [ordereddict_to_dict(item) for item in value]
+    elif isinstance(value, dict):
+        return {k: ordereddict_to_dict(v) for k, v in value.items()}
+    else:
+        return value
 
 
 class Component(ComponentBase):
@@ -140,11 +155,97 @@ class Component(ComponentBase):
         table.columns = output_columns
 
         if output_columns:
+
+            if params.get(KEY_QUERY_TYPE) == "Object":
+                tm = self._store_table_metadata(salesforce_client, soql_query.sf_object, table)
+                table.table_metadata = tm
+
             self.write_manifest(table)
             self.write_state_file({"last_run": start_run_time,
                                    "prev_output_columns": output_columns})
         else:
             shutil.rmtree(table.full_path)
+
+    @staticmethod
+    def get_description(salesforce_client, sf_object):
+        try:
+            return salesforce_client.describe_object_w_complete_metadata(sf_object)
+        except SalesforceClientException as salesforce_error:
+            logging.error(f"Cannot fetch metadata for object {sf_object}: {salesforce_error}")
+            return None
+
+    def _add_columns_to_table_metadata(self, tm, description, salesforce_client):
+        for item in description["fields"]:
+            if salesforce_client.is_bulk_supported_field(item):
+                column_name = str(item["name"])
+                column_type = str(item["type"])
+                nullable = item["nillable"]
+                default = item["defaultValue"]
+                label = item["label"]
+
+                tm.add_column_data_type(column=column_name,
+                                        data_type=self.convert_to_kbc_basetype(column_type),
+                                        source_data_type=column_type,
+                                        nullable=nullable,
+                                        default=default)
+
+                tm.add_column_metadata(column_name, "source_metadata", json.dumps(item))
+                tm.add_column_descriptions({column_name: label})
+
+    @staticmethod
+    def add_table_metadata(tm, description):
+        def recursive_flatten(prefix, nested_value):
+            if isinstance(nested_value, dict):
+                for k, v in nested_value.items():
+                    recursive_flatten(f"{prefix}_{k}", v)
+            elif isinstance(nested_value, list):
+                for i, v in enumerate(nested_value):
+                    recursive_flatten(f"{prefix}_{i}", v)
+            else:
+                tm.add_table_metadata(prefix, str(nested_value))
+
+        table_md = {str(k): v for k, v in description.items() if k != "fields"}
+        for key, value in table_md.items():
+            value = ordereddict_to_dict(value)
+            recursive_flatten(key, value)
+
+        # TO BE IMPLEMENTED IN KCOFAC-2110
+        # tm.add_table_description("test_description")
+
+    def _store_table_metadata(self, salesforce_client, sf_object, table):
+        description = self.get_description(salesforce_client, sf_object)
+        tm = TableMetadata(table.get_manifest_dictionary())
+
+        if description:
+            self._add_columns_to_table_metadata(tm, description, salesforce_client)
+            self.add_table_metadata(tm, description)
+
+        return tm
+
+    @staticmethod
+    def convert_to_kbc_basetype(source_type: str) -> str:
+        source_to_snowflake = {
+            'id': 'STRING',
+            'boolean': 'BOOLEAN',
+            'reference': 'STRING',
+            'string': 'STRING',
+            'picklist': 'STRING',
+            'textarea': 'STRING',
+            'double': 'FLOAT',
+            'phone': 'STRING',
+            'email': 'STRING',
+            'date': 'DATE',
+            'datetime': 'TIMESTAMP',
+            'url': 'STRING',
+            'int': 'INTEGER',
+            'currency': 'STRING'
+        }
+
+        if source_type in source_to_snowflake:
+            return SupportedDataTypes[source_to_snowflake[source_type]].value
+        else:
+            logging.error(f"Unsupported source type: {source_type}. Casting it to STRING.")
+            return SupportedDataTypes["STRING"].value
 
     @staticmethod
     def validate_incremental_settings(incremental: bool, pkey: List[str]) -> None:
@@ -288,6 +389,7 @@ class Component(ComponentBase):
                 else:
                     custom_message = error_message
                 raise UserException(custom_message) from salesforce_error
+
         else:
             raise UserException(f'Either {KEY_SOQL_QUERY} or {KEY_OBJECT} parameters must be specified.')
 

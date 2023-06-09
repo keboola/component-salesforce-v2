@@ -7,7 +7,7 @@ import requests
 
 from salesforce_bulk import SalesforceBulk
 from salesforce_bulk.salesforce_bulk import BulkBatchFailed
-from simple_salesforce.exceptions import SalesforceExpiredSession
+from simple_salesforce.exceptions import SalesforceExpiredSession, SalesforceMalformedRequest
 from salesforce_bulk.salesforce_bulk import DEFAULT_API_VERSION
 from simple_salesforce import SFType, Salesforce
 
@@ -144,6 +144,8 @@ class SalesforceClient(SalesforceBulk):
 
         try:
             result = self.simple_client.query(test_query)
+        except SalesforceMalformedRequest as e:
+            raise SalesforceClientException(f"Test Query {test_query.query} failed, please re-check the query.") from e
         except ConnectionError as e:
             raise SalesforceClientException(f"Encountered error when running query: {e}") from e
         except SalesforceExpiredSession as e:

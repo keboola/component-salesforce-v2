@@ -135,7 +135,7 @@ class Component(ComponentBase):
         output_columns = []
 
         if fetch_in_chunks:
-            self.test_query(salesforce_client, soql_query)
+            self._test_query(salesforce_client, soql_query)
 
             job_id, batch_ids = self.run_chunked_query(salesforce_client, soql_query)
             for index, result in enumerate(self.fetch_chunked_result(salesforce_client, job_id, batch_ids)):
@@ -168,7 +168,7 @@ class Component(ComponentBase):
             shutil.rmtree(table.full_path)
 
     @staticmethod
-    def test_query(salesforce_client, soql_query):
+    def _test_query(salesforce_client, soql_query):
         try:
             _ = salesforce_client.test_query(soql_query=soql_query, add_limit=True)
             return

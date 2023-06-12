@@ -209,7 +209,6 @@ class Component(ComponentBase):
             value = ordereddict_to_dict(value)
             recursive_flatten(key, value)
 
-
     def _store_metadata(self, salesforce_client, sf_object, table, output_columns):
         description = self.get_description(salesforce_client, sf_object)
         tm = TableMetadata(table.get_manifest_dictionary())

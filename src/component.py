@@ -209,16 +209,16 @@ class Component(ComponentBase):
             value = ordereddict_to_dict(value)
             recursive_flatten(key, value)
 
-        # TO BE IMPLEMENTED IN KCOFAC-2110
-        # tm.add_table_description("test_description")
 
     def _store_table_metadata(self, salesforce_client, sf_object, table):
+        # TO BE IMPLEMENTED IN KCOFAC-2110
+
         description = self.get_description(salesforce_client, sf_object)
         tm = TableMetadata(table.get_manifest_dictionary())
 
         if description:
             self._add_columns_to_table_metadata(tm, description, salesforce_client)
-            self.add_table_metadata(tm, description)
+            # self.add_table_metadata(tm, description)
 
         return tm
 
@@ -238,13 +238,14 @@ class Component(ComponentBase):
             'datetime': 'TIMESTAMP',
             'url': 'STRING',
             'int': 'INTEGER',
-            'currency': 'STRING'
+            'currency': 'STRING',
+            'multipicklist': 'STRING'
         }
 
         if source_type in source_to_snowflake:
             return SupportedDataTypes[source_to_snowflake[source_type]].value
         else:
-            logging.error(f"Unsupported source type: {source_type}. Casting it to STRING.")
+            logging.warning(f"Unknown source type: {source_type}. Casting it to STRING.")
             return SupportedDataTypes["STRING"].value
 
     @staticmethod

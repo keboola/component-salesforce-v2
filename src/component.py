@@ -157,7 +157,7 @@ class Component(ComponentBase):
         if output_columns:
 
             if params.get(KEY_QUERY_TYPE) == "Object":
-                tm = self._store_table_metadata(salesforce_client, soql_query.sf_object, table)
+                tm = self._store_metadata(salesforce_client, soql_query.sf_object, table, output_columns)
                 table.table_metadata = tm
 
             self.write_manifest(table)
@@ -174,9 +174,9 @@ class Component(ComponentBase):
             logging.error(f"Cannot fetch metadata for object {sf_object}: {salesforce_error}")
             return None
 
-    def _add_columns_to_table_metadata(self, tm, description, salesforce_client):
+    def _add_columns_to_table_metadata(self, tm, description, output_columns):
         for item in description["fields"]:
-            if salesforce_client.is_bulk_supported_field(item):
+            if item.get("name", "") in output_columns:
                 column_name = str(item["name"])
                 column_type = str(item["type"])
                 nullable = item["nillable"]
@@ -209,16 +209,14 @@ class Component(ComponentBase):
             value = ordereddict_to_dict(value)
             recursive_flatten(key, value)
 
-        # TO BE IMPLEMENTED IN KCOFAC-2110
-        # tm.add_table_description("test_description")
-
-    def _store_table_metadata(self, salesforce_client, sf_object, table):
+    def _store_metadata(self, salesforce_client, sf_object, table, output_columns):
         description = self.get_description(salesforce_client, sf_object)
         tm = TableMetadata(table.get_manifest_dictionary())
 
         if description:
-            self._add_columns_to_table_metadata(tm, description, salesforce_client)
-            self.add_table_metadata(tm, description)
+            self._add_columns_to_table_metadata(tm, description, output_columns)
+            # TODO IMPLEMENT IN KCOFAC-2110
+            # self.add_table_metadata(tm, description)
 
         return tm
 
@@ -238,13 +236,14 @@ class Component(ComponentBase):
             'datetime': 'TIMESTAMP',
             'url': 'STRING',
             'int': 'INTEGER',
-            'currency': 'STRING'
+            'currency': 'STRING',
+            'multipicklist': 'STRING'
         }
 
         if source_type in source_to_snowflake:
             return SupportedDataTypes[source_to_snowflake[source_type]].value
         else:
-            logging.error(f"Unsupported source type: {source_type}. Casting it to STRING.")
+            logging.warning(f"Unknown source type: {source_type}. Casting it to STRING.")
             return SupportedDataTypes["STRING"].value
 
     @staticmethod

@@ -189,7 +189,9 @@ class Component(ComponentBase):
                                         nullable=nullable,
                                         default=default)
 
-                tm.add_column_metadata(column_name, "source_metadata", json.dumps(item))
+                # The following is disabled since it caused exceeded metadata size
+                # tm.add_column_metadata(column_name, "source_metadata", json.dumps(item))
+
                 tm.add_column_descriptions({column_name: label})
 
     @staticmethod

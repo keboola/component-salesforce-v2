@@ -143,7 +143,6 @@ class SalesforceClient(SalesforceBulk):
         except SalesforceClientException:
             raise SalesforceClientException(f"Test query {test_query} failed.")
 
-
         logging.info("Test query has been successful.")
         return
 

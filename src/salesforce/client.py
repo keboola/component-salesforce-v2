@@ -137,6 +137,7 @@ class SalesforceClient(SalesforceBulk):
             test_query.add_limit()
 
         try:
+            logging.info("Running test SOQL.")
             _ = self.run_query(test_query)
         except SalesforceMalformedRequest as e:
             raise SalesforceClientException(f"Test Query {test_query.query} failed, please re-check the query.") from e

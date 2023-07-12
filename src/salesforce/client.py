@@ -111,7 +111,7 @@ class SalesforceClient(SalesforceBulk):
         return field["type"] not in NON_SUPPORTED_BULK_FIELD_TYPES
 
     @backoff.on_exception(backoff.expo, SalesforceClientException, max_tries=3)
-    def run_query(self, soql_query: SoqlQuery) -> Iterator:
+    def run_query(self, soql_query: SoqlQuery, fail_on_error: bool = False) -> Iterator:
         job = self.create_queryall_job(soql_query.sf_object, contentType='CSV', concurrency='Parallel')
         batch = self.query(job, soql_query.query)
         logging.info(f"Running SOQL : {soql_query.query}")
@@ -120,6 +120,8 @@ class SalesforceClient(SalesforceBulk):
             while not self.is_batch_done(batch):
                 sleep(10)
         except BulkBatchFailed as batch_fail:
+            if fail_on_error:
+                raise SalesforceClientException(batch_fail.state_message)
             logging.exception(batch_fail.state_message)
         except ConnectionError as e:
             raise SalesforceClientException(f"Encountered error when running query: {e}") from e
@@ -132,6 +134,7 @@ class SalesforceClient(SalesforceBulk):
 
     @backoff.on_exception(backoff.expo, SalesforceClientException, max_tries=3)
     def test_query(self, soql_query: SoqlQuery, add_limit: bool = False) -> None:
+        """Test query has been implemented to prevent long timeouts of batched queries."""
         test_query = copy.deepcopy(soql_query)
         if add_limit:
             test_query.add_limit()

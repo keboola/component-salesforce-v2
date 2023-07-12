@@ -136,20 +136,16 @@ class SalesforceClient(SalesforceBulk):
         if add_limit:
             test_query.add_limit()
 
-        logging.info(f"Running test SOQL : {test_query.query}")
-
         try:
-            result = self.simple_client.query(test_query)
+            _ = self.run_query(test_query)
         except SalesforceMalformedRequest as e:
             raise SalesforceClientException(f"Test Query {test_query.query} failed, please re-check the query.") from e
-        except ConnectionError as e:
-            raise SalesforceClientException(f"Encountered error when running query: {e}") from e
-        except SalesforceExpiredSession as e:
-            raise SalesforceClientException(f"Encountered Expired Session error when running query: {e}") from e
+        except SalesforceClientException:
+            raise SalesforceClientException(f"Test query {test_query} failed.")
+
 
         logging.info("Test query has been successful.")
-
-        return result
+        return
 
     @backoff.on_exception(backoff.expo, SalesforceClientException, max_tries=3)
     def run_chunked_query(self, soql_query):

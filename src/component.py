@@ -448,6 +448,15 @@ class Component(ComponentBase):
         Tests Salesforce query.
 
         """
+
+        table_content = """
+        | Name      | Age |
+        | --------- | --- |
+        | John      | 25  |
+        | Jane      | 30  |
+        | Michael   | 22  |
+        """
+
         params = self.configuration.parameters
         salesforce_client = self.get_salesforce_client(params)
 
@@ -457,7 +466,7 @@ class Component(ComponentBase):
 
         try:
             self._test_query(salesforce_client, soql_query, False)
-            return ValidationResult("Query is OK", MessageType.SUCCESS)
+            return ValidationResult(table_content, MessageType.SUCCESS)
         except UserException as e:
             return ValidationResult(f"Query Failed: {e}", MessageType.WARNING)
 

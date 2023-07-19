@@ -5,6 +5,7 @@ from datetime import datetime
 from datetime import timezone
 from os import path, mkdir
 from collections import OrderedDict
+from py_markdown_table.markdown_table import markdown_table
 
 from enum import Enum
 from typing import Dict
@@ -169,8 +170,8 @@ class Component(ComponentBase):
     @staticmethod
     def _test_query(salesforce_client, soql_query, add_limit: bool = False):
         try:
-            _ = salesforce_client.test_query(soql_query=soql_query, add_limit=add_limit)
-            return
+            result = salesforce_client.test_query(soql_query=soql_query, add_limit=add_limit)
+            return result
         except SalesforceClientException as e:
             raise UserException(e) from e
 
@@ -448,15 +449,6 @@ class Component(ComponentBase):
         Tests Salesforce query.
 
         """
-
-        table_content = """
-        | Name      | Age |
-        | --------- | --- |
-        | John      | 25  |
-        | Jane      | 30  |
-        | Michael   | 22  |
-        """
-
         params = self.configuration.parameters
         salesforce_client = self.get_salesforce_client(params)
 
@@ -464,9 +456,15 @@ class Component(ComponentBase):
         soql_query = salesforce_client.build_query_from_string(soql_query_string)
         self.validate_soql_query(soql_query, [])
 
+        data = []
         try:
-            self._test_query(salesforce_client, soql_query, False)
-            return ValidationResult(table_content, MessageType.SUCCESS)
+            result = self._test_query(salesforce_client, soql_query, False)
+            for index, result in enumerate(self.fetch_result(result)):
+                reader = unicodecsv.DictReader(result)
+                for row in reader:
+                    data.append(row)
+            markdown = markdown_table(data).get_markdown()
+            return ValidationResult(markdown, MessageType.SUCCESS)
         except UserException as e:
             return ValidationResult(f"Query Failed: {e}", MessageType.WARNING)
 

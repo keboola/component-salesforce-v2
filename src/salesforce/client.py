@@ -111,7 +111,7 @@ class SalesforceClient(SalesforceBulk):
         return field["type"] not in NON_SUPPORTED_BULK_FIELD_TYPES
 
     @backoff.on_exception(backoff.expo, SalesforceClientException, max_tries=3)
-    def run_query(self, soql_query: SoqlQuery) -> Iterator:
+    def run_query(self, soql_query: SoqlQuery, fail_on_error: bool = False) -> Iterator:
         job = self.create_queryall_job(soql_query.sf_object, contentType='CSV', concurrency='Parallel')
         batch = self.query(job, soql_query.query)
         logging.info(f"Running SOQL : {soql_query.query}")
@@ -120,6 +120,8 @@ class SalesforceClient(SalesforceBulk):
             while not self.is_batch_done(batch):
                 sleep(10)
         except BulkBatchFailed as batch_fail:
+            if fail_on_error:
+                raise SalesforceClientException(batch_fail.state_message)
             logging.exception(batch_fail.state_message)
         except ConnectionError as e:
             raise SalesforceClientException(f"Encountered error when running query: {e}") from e
@@ -130,26 +132,19 @@ class SalesforceClient(SalesforceBulk):
         batch_result = self.get_all_results_from_query_batch(batch)
         return batch_result
 
-    @backoff.on_exception(backoff.expo, SalesforceClientException, max_tries=3)
     def test_query(self, soql_query: SoqlQuery, add_limit: bool = False) -> None:
+        """Test query has been implemented to prevent long timeouts of batched queries."""
         test_query = copy.deepcopy(soql_query)
         if add_limit:
             test_query.add_limit()
 
-        logging.info(f"Running test SOQL : {test_query.query}")
-
         try:
-            result = self.simple_client.query(test_query)
-        except SalesforceMalformedRequest as e:
-            raise SalesforceClientException(f"Test Query {test_query.query} failed, please re-check the query.") from e
-        except ConnectionError as e:
-            raise SalesforceClientException(f"Encountered error when running query: {e}") from e
-        except SalesforceExpiredSession as e:
-            raise SalesforceClientException(f"Encountered Expired Session error when running query: {e}") from e
+            logging.info("Running test SOQL.")
+            _ = self.run_query(test_query, fail_on_error=True)
+        except (SalesforceMalformedRequest, SalesforceClientException):
+            raise SalesforceClientException(f"Test Query {test_query.query} failed, please re-check the query.")
 
         logging.info("Test query has been successful.")
-
-        return result
 
     @backoff.on_exception(backoff.expo, SalesforceClientException, max_tries=3)
     def run_chunked_query(self, soql_query):

@@ -74,13 +74,24 @@
       "description": "Specify the SOQL query, eg. SELECT Id, FirstName, LastName FROM Contact. You can easily develop your SOQL code in the <a href='https://workbench.developerforce.com/login.php?startUrl=%2Fquery.php'>Developer Workbench</a>",
       "propertyOrder": 4
     },
+    "validation_button": {
+      "type": "button",
+      "format": "sync-action",
+      "propertyOrder": 5,
+      "options": {
+        "async": {
+          "label": "Test Query",
+          "action": "testQuery"
+        }
+      }
+    },
     "is_deleted": {
       "title": "Get deleted records",
       "type": "boolean",
       "format": "checkbox",
       "default": false,
       "description": "Fetch records that have been deleted",
-      "propertyOrder": 5
+      "propertyOrder": 6
     },
     "advanced_fetching_options": {
       "type": "object",

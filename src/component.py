@@ -15,7 +15,7 @@ import unicodecsv
 from keboola.component.base import ComponentBase, sync_action
 from keboola.component.dao import TableMetadata, SupportedDataTypes
 from keboola.component.exceptions import UserException
-from keboola.component.sync_actions import SelectElement
+from keboola.component.sync_actions import SelectElement, ValidationResult, MessageType
 from keboola.utils.header_normalizer import get_normalizer, NormalizerStrategy
 from retry import retry
 from salesforce_bulk.salesforce_bulk import BulkApiError, BulkBatchFailed
@@ -455,7 +455,11 @@ class Component(ComponentBase):
         soql_query = salesforce_client.build_query_from_string(soql_query_string)
         self.validate_soql_query(soql_query, [])
 
-        self._test_query(salesforce_client, soql_query, False)
+        try:
+            self._test_query(salesforce_client, soql_query, False)
+            return ValidationResult("Query is OK", MessageType.SUCCESS)
+        except UserException as e:
+            return ValidationResult(f"Query Failed: {e}", MessageType.WARNING)
 
     @sync_action('loadObjects')
     def load_possible_objects(self) -> List[SelectElement]:

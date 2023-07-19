@@ -146,7 +146,6 @@ class SalesforceClient(SalesforceBulk):
         except (SalesforceMalformedRequest, SalesforceClientException):
             raise SalesforceClientException(f"Test Query {test_query.query} failed, please re-check the query.")
 
-
     @backoff.on_exception(backoff.expo, SalesforceClientException, max_tries=3)
     def run_chunked_query(self, soql_query):
         job = self.create_queryall_job(soql_query.sf_object, contentType='CSV', concurrency='Parallel',

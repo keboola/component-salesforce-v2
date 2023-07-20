@@ -5,7 +5,6 @@ from datetime import datetime
 from datetime import timezone
 from os import path, mkdir
 from collections import OrderedDict
-from py_markdown_table.markdown_table import markdown_table
 
 from enum import Enum
 from typing import Dict

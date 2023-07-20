@@ -443,19 +443,24 @@ class Component(ComponentBase):
         params = self.configuration.parameters
         self.get_salesforce_client(params)
 
+    def create_markdown_table(self, data):
+        if not data:
+            return ""
+        headers = list(data[0].keys())
+        table = "| " + " | ".join(headers) + " |\n"
+        table += "| " + " | ".join(["---"] * len(headers)) + " |\n"
+        for row in data:
+            row_values = [str(row[header]) for header in headers]
+            table += "| " + " | ".join(row_values) + " |\n"
+        return table
+
     @sync_action('testQuery')
     def test_query(self):
-        """
-        Tests Salesforce query.
-
-        """
         params = self.configuration.parameters
         salesforce_client = self.get_salesforce_client(params)
-
         soql_query_string = params.get(KEY_SOQL_QUERY)
         soql_query = salesforce_client.build_query_from_string(soql_query_string)
         self.validate_soql_query(soql_query, [])
-
         data = []
         try:
             result = self._test_query(salesforce_client, soql_query, False)
@@ -463,7 +468,7 @@ class Component(ComponentBase):
                 reader = unicodecsv.DictReader(result)
                 for row in reader:
                     data.append(row)
-            markdown = markdown_table(data).get_markdown()
+            markdown = self.create_markdown_table(data)
             return ValidationResult(markdown, MessageType.SUCCESS)
         except UserException as e:
             return ValidationResult(f"Query Failed: {e}", MessageType.WARNING)

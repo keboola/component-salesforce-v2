@@ -132,7 +132,6 @@ class SalesforceClient(SalesforceBulk):
         batch_result = self.get_all_results_from_query_batch(batch)
         return batch_result
 
-    @backoff.on_exception(backoff.expo, SalesforceClientException, max_tries=3)
     def test_query(self, soql_query: SoqlQuery, add_limit: bool = False) -> Iterator:
         """Test query has been implemented to prevent long timeouts of batched queries."""
         test_query = copy.deepcopy(soql_query)

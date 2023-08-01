@@ -82,6 +82,9 @@
         "async": {
           "label": "Test Query",
           "action": "testQuery"
+        },
+        "dependencies": {
+          "query_type_selector": "Custom SOQL"
         }
       }
     },

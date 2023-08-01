@@ -133,7 +133,7 @@ class SalesforceClient(SalesforceBulk):
         return batch_result
 
     @backoff.on_exception(backoff.expo, SalesforceClientException, max_tries=3)
-    def test_query(self, soql_query: SoqlQuery, add_limit: bool = False) -> None:
+    def test_query(self, soql_query: SoqlQuery, add_limit: bool = False) -> Iterator:
         """Test query has been implemented to prevent long timeouts of batched queries."""
         test_query = copy.deepcopy(soql_query)
         if add_limit:
@@ -141,12 +141,12 @@ class SalesforceClient(SalesforceBulk):
 
         try:
             logging.info("Running test SOQL.")
-            _ = self.run_query(test_query, fail_on_error=True)
+            result = self.run_query(test_query, fail_on_error=True)
         except (SalesforceMalformedRequest, SalesforceClientException):
             raise SalesforceClientException(f"Test Query {test_query.query} failed, please re-check the query.")
 
         logging.info("Test query has been successful.")
-        return
+        return result
 
     @backoff.on_exception(backoff.expo, SalesforceClientException, max_tries=3)
     def run_chunked_query(self, soql_query):

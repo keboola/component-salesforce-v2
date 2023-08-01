@@ -463,6 +463,8 @@ class Component(ComponentBase):
         data = []
         try:
             result = self._test_query(salesforce_client, soql_query, False)
+            if not result:
+                return ValidationResult("Query returned no results", MessageType.WARNING)
             for index, result in enumerate(self.fetch_result(result)):
                 reader = unicodecsv.DictReader(result)
                 for row in reader:

@@ -114,6 +114,7 @@ class SalesforceClient(SalesforceBulk):
     def run_query(self, soql_query: SoqlQuery, fail_on_error: bool = False) -> Iterator:
         job = self.create_queryall_job(soql_query.sf_object, contentType='CSV', concurrency='Parallel')
         batch = self.query(job, soql_query.query)
+        self.close_job(job)
         logging.info(f"Running SOQL : {soql_query.query}")
 
         try:

@@ -470,7 +470,7 @@ class Component(ComponentBase):
                 for row in reader:
                     data.append(row)
             markdown = self.create_markdown_table(data)
-            return ValidationResult(markdown, MessageType.SUCCESS)
+            return ValidationResult(markdown, "table")
         except UserException as e:
             return ValidationResult(f"Query Failed: {e}", MessageType.WARNING)
 

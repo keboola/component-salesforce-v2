@@ -15,7 +15,7 @@ import unicodecsv
 from keboola.component.base import ComponentBase, sync_action
 from keboola.component.dao import TableMetadata, SupportedDataTypes
 from keboola.component.exceptions import UserException
-from keboola.component.sync_actions import SelectElement
+from keboola.component.sync_actions import SelectElement, ValidationResult, MessageType
 from keboola.utils.header_normalizer import get_normalizer, NormalizerStrategy
 from retry import retry
 from salesforce_bulk.salesforce_bulk import BulkApiError, BulkBatchFailed
@@ -134,7 +134,7 @@ class Component(ComponentBase):
         output_columns = []
 
         if fetch_in_chunks:
-            self._test_query(salesforce_client, soql_query)
+            self._test_query(salesforce_client, soql_query, True)
 
             job_id, batch_ids = self.run_chunked_query(salesforce_client, soql_query)
             for index, result in enumerate(self.fetch_chunked_result(salesforce_client, job_id, batch_ids)):
@@ -167,10 +167,10 @@ class Component(ComponentBase):
             shutil.rmtree(table.full_path)
 
     @staticmethod
-    def _test_query(salesforce_client, soql_query):
+    def _test_query(salesforce_client, soql_query, add_limit: bool = False):
         try:
-            _ = salesforce_client.test_query(soql_query=soql_query, add_limit=True)
-            return
+            result = salesforce_client.test_query(soql_query=soql_query, add_limit=add_limit)
+            return result
         except SalesforceClientException as e:
             raise UserException(e) from e
 
@@ -441,6 +441,38 @@ class Component(ComponentBase):
         """
         params = self.configuration.parameters
         self.get_salesforce_client(params)
+
+    def create_markdown_table(self, data):
+        if not data:
+            return ""
+        headers = list(data[0].keys())
+        table = "| " + " | ".join(headers) + " |\n"
+        table += "| " + " | ".join(["---"] * len(headers)) + " |\n"
+        for row in data:
+            row_values = [str(row[header]) for header in headers]
+            table += "| " + " | ".join(row_values) + " |\n"
+        return table
+
+    @sync_action('testQuery')
+    def test_query(self):
+        params = self.configuration.parameters
+        salesforce_client = self.get_salesforce_client(params)
+        soql_query_string = params.get(KEY_SOQL_QUERY)
+        soql_query = salesforce_client.build_query_from_string(soql_query_string)
+        self.validate_soql_query(soql_query, [])
+        data = []
+        try:
+            result = self._test_query(salesforce_client, soql_query, False)
+            if not result:
+                return ValidationResult("Query returned no results", MessageType.WARNING)
+            for index, result in enumerate(self.fetch_result(result)):
+                reader = unicodecsv.DictReader(result)
+                for row in reader:
+                    data.append(row)
+            markdown = self.create_markdown_table(data)
+            return ValidationResult(markdown, "table")
+        except UserException as e:
+            return ValidationResult(f"Query Failed: {e}", MessageType.WARNING)
 
     @sync_action('loadObjects')
     def load_possible_objects(self) -> List[SelectElement]:

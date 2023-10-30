@@ -132,10 +132,89 @@
       "description": "Specify the version of API you want to extract data from",
       "propertyOrder": 50
     },
+    "proxy": {
+      "type": "object",
+      "title": "Proxy Settings",
+      "format": "grid-strict",
+      "description": "Proxy address will be constructed in (username:password@)your.proxy.server.com(:port) format.",
+      "propertyOrder": 60,
+      "properties": {
+        "use_proxy": {
+          "title": "Use Proxy",
+          "type": "boolean",
+          "format": "checkbox",
+          "default": false,
+          "options": {
+            "grid_columns": 6,
+            "grid_break": true
+          },
+          "propertyOrder": 1
+        },
+        "proxy_server": {
+          "type": "string",
+          "title": "HTTPS Proxy Server Address",
+          "options": {
+            "grid_columns": 8,
+            "dependencies": {
+              "use_proxy": true
+            }
+          },
+          "propertyOrder": 2
+        },
+        "proxy_port": {
+          "type": "string",
+          "title": "HTTPS Proxy Server Port",
+          "options": {
+            "grid_columns": 4,
+            "dependencies": {
+              "use_proxy": true
+            }
+          },
+          "propertyOrder": 3
+        },
+        "basic_auth": {
+          "title": "Basic Authentication",
+          "type": "boolean",
+          "format": "checkbox",
+          "default": false,
+          "options": {
+            "grid_columns": 6,
+            "grid_break": true,
+            "dependencies": {
+              "use_proxy": true
+            }
+          },
+          "propertyOrder": 6
+        },
+        "username": {
+          "type": "string",
+          "title": "HTTPS Proxy Server Username",
+          "options": {
+            "dependencies": {
+              "use_proxy": true,
+              "basic_auth": true
+            }
+          },
+          "propertyOrder": 10
+        },
+        "#password": {
+          "type": "string",
+          "title": "HTTPS Proxy Server Password",
+          "format": "password",
+          "options": {
+            "dependencies": {
+              "use_proxy": true,
+              "basic_auth": true
+            }
+          },
+          "propertyOrder": 15
+        }
+      }
+    },
     "test_connection": {
       "type": "button",
       "format": "test-connection",
-      "propertyOrder": 60
+      "propertyOrder": 70
     }
   }
 }

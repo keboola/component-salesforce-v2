@@ -1,5 +1,6 @@
 import csv
 import logging
+import os
 import shutil
 from datetime import datetime
 from datetime import timezone
@@ -53,6 +54,15 @@ KEY_LOADING_OPTIONS_INCREMENTAL = "incremental"
 KEY_LOADING_OPTIONS_INCREMENTAL_FIELD = "incremental_field"
 KEY_LOADING_OPTIONS_INCREMENTAL_FETCH = "incremental_fetch"
 KEY_LOADING_OPTIONS_PKEY = "pkey"
+
+# Proxy
+KEY_PROXY = "proxy"
+KEY_USE_PROXY = "use_proxy"
+KEY_PROXY_SERVER = "proxy_server"
+KEY_PROXY_PORT = "proxy_port"
+KEY_PROXY_USERNAME = "username"
+KEY_PROXY_PASSWORD = "#password"
+KEY_USE_HTTP_PROXY_AS_HTTPS = "use_http_proxy_as_https"
 
 RECORDS_NOT_FOUND = ['Records not found for this query']
 
@@ -166,6 +176,43 @@ class Component(ComponentBase):
         else:
             shutil.rmtree(table.full_path)
 
+    def set_proxy(self) -> None:
+        """Sets proxy if defined"""
+        proxy_config = self.configuration.parameters.get(KEY_PROXY, {})
+        if proxy_config.get(KEY_USE_PROXY):
+            self._set_proxy(proxy_config)
+
+    def _set_proxy(self, proxy_config: dict) -> None:
+        """
+        Sets proxy using environmental variables.
+        Also, a special case when http proxy is used for https is handled by using KEY_USE_HTTP_PROXY_AS_HTTPS.
+        os.environ['HTTPS_PROXY'] = (username:password@)your.proxy.server.com(:port)
+        """
+        proxy_server = proxy_config.get(KEY_PROXY_SERVER)
+        proxy_port = str(proxy_config.get(KEY_PROXY_PORT))
+        proxy_username = proxy_config.get(KEY_PROXY_USERNAME)
+        proxy_password = proxy_config.get(KEY_PROXY_PASSWORD)
+        use_http_proxy_as_https = proxy_config.get(
+            KEY_USE_HTTP_PROXY_AS_HTTPS) or self.configuration.image_parameters.get(KEY_USE_HTTP_PROXY_AS_HTTPS)
+
+        if not proxy_server:
+            raise UserException("You have selected use_proxy parameter, but you have not specified proxy server.")
+        if not proxy_port:
+            raise UserException("You have selected use_proxy parameter, but you have not specified proxy port.")
+
+        _proxy_credentials = f"{proxy_username}:{proxy_password}@" if proxy_username and proxy_password else ""
+        _proxy_server = f"{_proxy_credentials}{proxy_server}:{proxy_port}"
+
+        if use_http_proxy_as_https:
+            # This is a case of http proxy which also supports https.
+            _proxy_server = f"http://{_proxy_server}"
+        else:
+            _proxy_server = f"https://{_proxy_server}"
+
+        os.environ["HTTPS_PROXY"] = _proxy_server
+
+        logging.info("Component will use proxy server.")
+
     @staticmethod
     def _test_query(salesforce_client, soql_query, add_limit: bool = False):
         try:
@@ -270,6 +317,7 @@ class Component(ComponentBase):
                                 f" in the Salesforce object.")
 
     def get_salesforce_client(self, params: Dict) -> SalesforceClient:
+        self.set_proxy()
         try:
             return self._login_to_salesforce(params)
         except SalesforceAuthenticationFailed as e:

@@ -1,4 +1,6 @@
+import base64
 import logging
+from json import JSONDecodeError
 from time import sleep
 from urllib.parse import urlparse, urljoin
 import copy
@@ -38,7 +40,8 @@ class SalesforceClientException(Exception):
 
 
 class SalesforceClient(SalesforceBulk):
-    def __init__(self, simple_client: Salesforce, api_version: str, pk_chunking_size: int = DEFAULT_CHUNK_SIZE) -> None:
+    def __init__(self, simple_client: Salesforce, api_version: str, pk_chunking_size: int = DEFAULT_CHUNK_SIZE,
+                 consumer_key: str = None, consumer_secret: str = None) -> None:
         # Initialize the client with from_connected_app or from_security_token, this creates a login with the
         # simple salesforce client. The simple_client sessionId is a Bearer token that is result of the login.
         super().__init__(sessionId=simple_client.session_id,
@@ -68,6 +71,30 @@ class SalesforceClient(SalesforceBulk):
 
         domain = 'test' if sandbox else domain
         simple_client = Salesforce(username=username, password=password, security_token=security_token,
+                                   domain=domain, version=api_version)
+
+        return cls(simple_client=simple_client, api_version=api_version, pk_chunking_size=pk_chunking_size)
+
+    @classmethod
+    def from_connected_app_oauth_cc(cls, username: str, password: str, consumer_key: str, consumer_secret: str,
+                                    api_version: str, sandbox: str, pk_chunking_size: int = DEFAULT_CHUNK_SIZE,
+                                    domain: str = None):
+
+        domain = 'test' if sandbox else domain
+        simple_client = Salesforce(username=username, password=password, consumer_key=consumer_key,
+                                   consumer_secret=consumer_secret, domain=domain, version=api_version)
+
+        return cls(simple_client=simple_client, api_version=api_version, pk_chunking_size=pk_chunking_size)
+
+    @classmethod
+    def from_connected_app_oauth_auth_code(cls, consumer_key: str, consumer_secret: str, refresh_token: str,
+                                    api_version: str, sandbox: str, pk_chunking_size: int = DEFAULT_CHUNK_SIZE,
+                                    domain: str = None):
+
+        domain = 'test' if sandbox else domain
+
+        access_token = cls._login_oauth(domain, consumer_key, consumer_secret, refresh_token)
+        simple_client = Salesforce(consumer_key=consumer_key, consumer_secret=consumer_secret, session_id=access_token,
                                    domain=domain, version=api_version)
 
         return cls(simple_client=simple_client, api_version=api_version, pk_chunking_size=pk_chunking_size)
@@ -235,3 +262,47 @@ class SalesforceClient(SalesforceBulk):
             if sf_object.get('queryable') and not sf_object.get('name') in OBJECTS_NOT_SUPPORTED_BY_BULK:
                 to_fetch.append({"label": sf_object.get('label'), 'value': sf_object.get('name')})
         return to_fetch
+
+    @staticmethod
+    def _login_oauth(domain: str, consumer_key: str, consumer_secret: str, refresh_token: str = None):
+        if refresh_token:
+            token_data = {'grant_type': 'refresh_token',
+                          'refresh_token': refresh_token}
+            token_url = f'https://{domain}.salesforce.com/services/oauth2/token'
+
+        else:
+            token_data = {'grant_type': 'client_credentials'}
+            token_url = f'https://{domain}/services/oauth2/token'
+
+        authorization = f'{consumer_key}:{consumer_secret}'
+        encoded = base64.b64encode(authorization.encode()).decode()
+        headers = {
+            'Authorization': f'Basic {encoded}'
+        }
+        response = requests.post(token_url, token_data, headers=headers)
+
+        try:
+            json_response = response.json()
+        except JSONDecodeError as exc:
+            raise SalesforceClientException(
+                response.status_code, response.text
+            ) from exc
+
+        if response.status_code != 200:
+            except_code = json_response.get('error')
+            except_msg = json_response.get('error_description')
+            if except_msg == "user hasn't approved this consumer":
+                auth_url = f'https://{domain}.salesforce.com/services/oauth2/' \
+                           'authorize?response_type=code&client_id=' \
+                           f'{consumer_key}&redirect_uri=<approved URI>'
+                except_msg += f"""\n
+                          If your connected app policy is set to "All users may
+                          self-authorize", you may need to authorize this
+                          application first. Browse to
+                          {auth_url}
+                          in order to Allow Access. Check first to ensure you have a valid
+                          <approved URI>."""
+            raise SalesforceClientException(except_code, except_msg)
+
+        access_token = json_response.get('access_token')
+        return access_token

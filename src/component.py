@@ -1,30 +1,27 @@
-import csv
-import logging
 import os
 import shutil
-from datetime import datetime
-from datetime import timezone
+from datetime import datetime, timezone
 from os import path, mkdir
 from collections import OrderedDict
+from typing import Dict, Iterator, List
+import logging
 
-from enum import Enum
-from typing import Dict
-from typing import Iterator
-from typing import List
-
+import csv
 import unicodecsv
+from retry import retry
+from enum import Enum
+
 from keboola.component.base import ComponentBase, sync_action
 from keboola.component.dao import TableMetadata, SupportedDataTypes
 from keboola.component.exceptions import UserException
 from keboola.component.sync_actions import SelectElement, ValidationResult, MessageType
 from keboola.utils.header_normalizer import get_normalizer, NormalizerStrategy
-from retry import retry
-from salesforce_bulk.salesforce_bulk import BulkApiError, BulkBatchFailed
-from simple_salesforce.exceptions import SalesforceAuthenticationFailed
-from simple_salesforce.exceptions import SalesforceResourceNotFound, SalesforceError
 
+from salesforce_bulk.salesforce_bulk import BulkApiError, BulkBatchFailed
+from simple_salesforce.exceptions import SalesforceAuthenticationFailed, SalesforceResourceNotFound, SalesforceError
 from salesforce.client import SalesforceClient, SalesforceClientException
 from salesforce.soql_query import SoqlQuery
+
 
 # default as previous versions of this component ex-salesforce-v2 had 40.0
 DEFAULT_API_VERSION = "42.0"
@@ -32,6 +29,7 @@ DEFAULT_API_VERSION = "42.0"
 KEY_LOGIN_METHOD = "login_method"
 KEY_CONSUMER_KEY = "#consumer_key"
 KEY_CONSUMER_SECRET = "#consumer_secret"
+KEY_DOMAIN = "domain"
 KEY_USERNAME = "username"
 KEY_PASSWORD = "#password"
 KEY_SECURITY_TOKEN = "#security_token"
@@ -68,7 +66,7 @@ RECORDS_NOT_FOUND = ['Records not found for this query']
 
 # list of mandatory parameters => if some is missing,
 # component will fail with readable message on initialization.
-REQUIRED_PARAMETERS = [KEY_USERNAME, KEY_PASSWORD, [KEY_SOQL_QUERY, KEY_OBJECT]]
+REQUIRED_PARAMETERS = [[KEY_SOQL_QUERY, KEY_OBJECT]]
 REQUIRED_IMAGE_PARS = []
 
 DEFAULT_LOGIN_METHOD = "security_token"
@@ -77,6 +75,8 @@ DEFAULT_LOGIN_METHOD = "security_token"
 class LoginType(str, Enum):
     SECURITY_TOKEN_LOGIN = "security_token"
     CONNECTED_APP_LOGIN = "connected_app"
+    CONNECTED_APP_OAUTH_CC = "connected_app_oauth_cc"
+    CONNECTED_APP_OAUTH_AUTH_CODE = "connected_app_oauth_auth_code"
 
     @classmethod
     def list(cls):
@@ -339,7 +339,9 @@ class Component(ComponentBase):
                                                         security_token=params.get(KEY_SECURITY_TOKEN),
                                                         sandbox=params.get(KEY_SANDBOX),
                                                         api_version=params.get(KEY_API_VERSION, DEFAULT_API_VERSION),
-                                                        pk_chunking_size=advanced_fetching_options.get(KEY_CHUNK_SIZE))
+                                                        pk_chunking_size=advanced_fetching_options.get(KEY_CHUNK_SIZE),
+                                                        domain=params.get(KEY_DOMAIN))
+
         elif login_method == LoginType.CONNECTED_APP_LOGIN:
             if not params.get(KEY_CONSUMER_KEY) or not params.get(KEY_CONSUMER_SECRET):
                 raise UserException("Missing Required Parameter : At least one of Consumer Key and Consumer Secret "
@@ -350,7 +352,29 @@ class Component(ComponentBase):
                                                        consumer_secret=params.get(KEY_CONSUMER_SECRET),
                                                        sandbox=params.get(KEY_SANDBOX),
                                                        api_version=params.get(KEY_API_VERSION, DEFAULT_API_VERSION),
-                                                       pk_chunking_size=advanced_fetching_options.get(KEY_CHUNK_SIZE))
+                                                       pk_chunking_size=advanced_fetching_options.get(KEY_CHUNK_SIZE),
+                                                       domain=params.get(KEY_DOMAIN))
+
+        elif login_method == LoginType.CONNECTED_APP_OAUTH_CC:
+            if not params.get(KEY_CONSUMER_KEY) or not params.get(KEY_CONSUMER_SECRET):
+                raise UserException("Missing Required Parameter : At least one of Consumer Key and Consumer Secret "
+                                    "are missing.  They are both required when using Connected App Login")
+            return SalesforceClient.from_connected_app_oauth_cc(username=params.get(KEY_USERNAME),
+                                                                password=params.get(KEY_PASSWORD),
+                                                                consumer_key=params[KEY_CONSUMER_KEY],
+                                                                consumer_secret=params[KEY_CONSUMER_SECRET],
+                                                                api_version=params.get(KEY_API_VERSION, DEFAULT_API_VERSION),
+                                                                sandbox=params.get(KEY_SANDBOX),
+                                                                domain=params.get(KEY_DOMAIN))
+
+        elif login_method == LoginType.CONNECTED_APP_OAUTH_AUTH_CODE:
+            return SalesforceClient.from_connected_app_oauth_auth_code(
+                consumer_key=self.configuration.oauth_credentials.appKey,
+                consumer_secret=self.configuration.oauth_credentials.appSecret,
+                refresh_token=self.configuration.oauth_credentials.data['refresh_token'],
+                api_version=params.get(KEY_API_VERSION, DEFAULT_API_VERSION),
+                sandbox=params.get(KEY_SANDBOX),
+                domain=params.get(KEY_DOMAIN))
 
     def _get_login_method(self) -> LoginType:
         login_type_name = self.configuration.parameters.get(KEY_LOGIN_METHOD, DEFAULT_LOGIN_METHOD)

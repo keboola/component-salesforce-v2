@@ -76,26 +76,12 @@ class SalesforceClient(SalesforceBulk):
         return cls(simple_client=simple_client, api_version=api_version, pk_chunking_size=pk_chunking_size)
 
     @classmethod
-    def from_connected_app_oauth_cc(cls, username: str, password: str, consumer_key: str, consumer_secret: str,
-                                    api_version: str, sandbox: str, pk_chunking_size: int = DEFAULT_CHUNK_SIZE,
-                                    domain: str = None):
+    def from_connected_app_oauth_cc(cls, consumer_key: str, consumer_secret: str, api_version: str, sandbox: str,
+                                    pk_chunking_size: int = DEFAULT_CHUNK_SIZE, domain: str = None):
 
         domain = 'test' if sandbox else domain
-        simple_client = Salesforce(username=username, password=password, consumer_key=consumer_key,
-                                   consumer_secret=consumer_secret, domain=domain, version=api_version)
-
-        return cls(simple_client=simple_client, api_version=api_version, pk_chunking_size=pk_chunking_size)
-
-    @classmethod
-    def from_connected_app_oauth_auth_code(cls, consumer_key: str, consumer_secret: str, refresh_token: str,
-                                           api_version: str, sandbox: str, pk_chunking_size: int = DEFAULT_CHUNK_SIZE,
-                                           domain: str = None):
-
-        domain = 'test' if sandbox else domain
-
-        access_token = cls._login_oauth(domain, consumer_key, consumer_secret, refresh_token)
-        simple_client = Salesforce(consumer_key=consumer_key, consumer_secret=consumer_secret, session_id=access_token,
-                                   domain=domain, version=api_version)
+        simple_client = Salesforce(consumer_key=consumer_key, consumer_secret=consumer_secret, domain=domain,
+                                   version=api_version)
 
         return cls(simple_client=simple_client, api_version=api_version, pk_chunking_size=pk_chunking_size)
 

@@ -76,7 +76,6 @@ class LoginType(str, Enum):
     SECURITY_TOKEN_LOGIN = "security_token"
     CONNECTED_APP_LOGIN = "connected_app"
     CONNECTED_APP_OAUTH_CC = "connected_app_oauth_cc"
-    CONNECTED_APP_OAUTH_AUTH_CODE = "connected_app_oauth_auth_code"
 
     @classmethod
     def list(cls):
@@ -359,23 +358,12 @@ class Component(ComponentBase):
             if not params.get(KEY_CONSUMER_KEY) or not params.get(KEY_CONSUMER_SECRET):
                 raise UserException("Missing Required Parameter : At least one of Consumer Key and Consumer Secret "
                                     "are missing.  They are both required when using Connected App Login")
-            return SalesforceClient.from_connected_app_oauth_cc(username=params.get(KEY_USERNAME),
-                                                                password=params.get(KEY_PASSWORD),
-                                                                consumer_key=params[KEY_CONSUMER_KEY],
+            return SalesforceClient.from_connected_app_oauth_cc(consumer_key=params[KEY_CONSUMER_KEY],
                                                                 consumer_secret=params[KEY_CONSUMER_SECRET],
                                                                 api_version=params.get(
                                                                     KEY_API_VERSION, DEFAULT_API_VERSION),
                                                                 sandbox=params.get(KEY_SANDBOX),
                                                                 domain=params.get(KEY_DOMAIN))
-
-        elif login_method == LoginType.CONNECTED_APP_OAUTH_AUTH_CODE:
-            return SalesforceClient.from_connected_app_oauth_auth_code(
-                consumer_key=self.configuration.oauth_credentials.appKey,
-                consumer_secret=self.configuration.oauth_credentials.appSecret,
-                refresh_token=self.configuration.oauth_credentials.data['refresh_token'],
-                api_version=params.get(KEY_API_VERSION, DEFAULT_API_VERSION),
-                sandbox=params.get(KEY_SANDBOX),
-                domain=params.get(KEY_DOMAIN))
 
     def _get_login_method(self) -> LoginType:
         login_type_name = self.configuration.parameters.get(KEY_LOGIN_METHOD, DEFAULT_LOGIN_METHOD)

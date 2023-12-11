@@ -363,7 +363,8 @@ class Component(ComponentBase):
                                                                 password=params.get(KEY_PASSWORD),
                                                                 consumer_key=params[KEY_CONSUMER_KEY],
                                                                 consumer_secret=params[KEY_CONSUMER_SECRET],
-                                                                api_version=params.get(KEY_API_VERSION, DEFAULT_API_VERSION),
+                                                                api_version=params.get(
+                                                                    KEY_API_VERSION, DEFAULT_API_VERSION),
                                                                 sandbox=params.get(KEY_SANDBOX),
                                                                 domain=params.get(KEY_DOMAIN))
 

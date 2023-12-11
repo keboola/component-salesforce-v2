@@ -88,8 +88,8 @@ class SalesforceClient(SalesforceBulk):
 
     @classmethod
     def from_connected_app_oauth_auth_code(cls, consumer_key: str, consumer_secret: str, refresh_token: str,
-                                    api_version: str, sandbox: str, pk_chunking_size: int = DEFAULT_CHUNK_SIZE,
-                                    domain: str = None):
+                                           api_version: str, sandbox: str, pk_chunking_size: int = DEFAULT_CHUNK_SIZE,
+                                           domain: str = None):
 
         domain = 'test' if sandbox else domain
 

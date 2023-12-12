@@ -330,8 +330,12 @@ class Component(ComponentBase):
 
         if login_method == LoginType.SECURITY_TOKEN_LOGIN:
             if not params.get(KEY_SECURITY_TOKEN):
-                raise UserException("Missing Required Parameter : Security Token. "
+                raise UserException("Missing Required Parameter: Security Token. "
                                     "It is required when using Security Token Login")
+
+            if not params.get(KEY_USERNAME) or not params.get(KEY_PASSWORD):
+                raise UserException("Missing Required Parameter: Both username and password are required for "
+                                    "Security Token Login.")
 
             return SalesforceClient.from_security_token(username=params.get(KEY_USERNAME),
                                                         password=params.get(KEY_PASSWORD),
@@ -342,8 +346,13 @@ class Component(ComponentBase):
 
         elif login_method == LoginType.CONNECTED_APP_LOGIN:
             if not params.get(KEY_CONSUMER_KEY) or not params.get(KEY_CONSUMER_SECRET):
-                raise UserException("Missing Required Parameter : At least one of Consumer Key and Consumer Secret "
-                                    "are missing.  They are both required when using Connected App Login")
+                raise UserException("Missing Required Parameter: At least one of Consumer Key and Consumer Secret "
+                                    "are missing. They are both required when using Connected App Login")
+
+            if not params.get(KEY_USERNAME) or not params.get(KEY_PASSWORD):
+                raise UserException("Missing Required Parameter: Both username and password are required for "
+                                    "Connected App Login.")
+
             return SalesforceClient.from_connected_app(username=params.get(KEY_USERNAME),
                                                        password=params.get(KEY_PASSWORD),
                                                        consumer_key=params.get(KEY_CONSUMER_KEY),
@@ -354,8 +363,8 @@ class Component(ComponentBase):
 
         elif login_method == LoginType.CONNECTED_APP_OAUTH_CC:
             if not params.get(KEY_CONSUMER_KEY) or not params.get(KEY_CONSUMER_SECRET):
-                raise UserException("Missing Required Parameter : At least one of Consumer Key and Consumer Secret "
-                                    "are missing.  They are both required when using Connected App Login")
+                raise UserException("Missing Required Parameter: At least one of Consumer Key and Consumer Secret "
+                                    "are missing. They are both required when using Connected App Login")
 
             if not (domain := params.get(KEY_DOMAIN)):
                 raise UserException("Parameter 'domain' is needed for Client Credentials Flow. ")

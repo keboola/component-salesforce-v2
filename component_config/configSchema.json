@@ -68,6 +68,18 @@
       "description": "Salesforce security token",
       "propertyOrder": 30
     },
+    "domain": {
+      "type": "string",
+      "title": "Domain",
+      "default": "",
+      "options": {
+        "dependencies": {
+          "login_method": "connected_app_oauth_cc"
+        }
+      },
+      "description": "Your Salesforce Domain. For example: keboola-dev-ed.my",
+      "propertyOrder": 30
+    },
     "#consumer_key": {
       "type": "string",
       "title": "Consumer Key",

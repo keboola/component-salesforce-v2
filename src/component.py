@@ -358,6 +358,8 @@ class Component(ComponentBase):
             if not params.get(KEY_CONSUMER_KEY) or not params.get(KEY_CONSUMER_SECRET):
                 raise UserException("Missing Required Parameter : At least one of Consumer Key and Consumer Secret "
                                     "are missing.  They are both required when using Connected App Login")
+            if not params.get(KEY_DOMAIN):
+                raise UserException("Parameter 'domain' is needed for Client Credentials Flow. ")
             return SalesforceClient.from_connected_app_oauth_cc(consumer_key=params[KEY_CONSUMER_KEY],
                                                                 consumer_secret=params[KEY_CONSUMER_SECRET],
                                                                 api_version=params.get(

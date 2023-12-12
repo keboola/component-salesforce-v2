@@ -83,7 +83,7 @@
           "login_method": "connected_app_oauth_cc"
         }
       },
-      "description": "Your Salesforce Domain. For example: keboola-dev-ed.my",
+      "description": "Your Salesforce Domain. For example: https://keboola-dev-ed.my.salesforce.com",
       "propertyOrder": 30
     },
     "#consumer_key": {

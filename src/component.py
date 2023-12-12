@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from os import path, mkdir
 from collections import OrderedDict
 from typing import Dict, Iterator, List
+from urllib.parse import urlparse
 import logging
 
 import csv
@@ -338,8 +339,7 @@ class Component(ComponentBase):
                                                         security_token=params.get(KEY_SECURITY_TOKEN),
                                                         sandbox=params.get(KEY_SANDBOX),
                                                         api_version=params.get(KEY_API_VERSION, DEFAULT_API_VERSION),
-                                                        pk_chunking_size=advanced_fetching_options.get(KEY_CHUNK_SIZE),
-                                                        domain=params.get(KEY_DOMAIN))
+                                                        pk_chunking_size=advanced_fetching_options.get(KEY_CHUNK_SIZE))
 
         elif login_method == LoginType.CONNECTED_APP_LOGIN:
             if not params.get(KEY_CONSUMER_KEY) or not params.get(KEY_CONSUMER_SECRET):
@@ -351,21 +351,22 @@ class Component(ComponentBase):
                                                        consumer_secret=params.get(KEY_CONSUMER_SECRET),
                                                        sandbox=params.get(KEY_SANDBOX),
                                                        api_version=params.get(KEY_API_VERSION, DEFAULT_API_VERSION),
-                                                       pk_chunking_size=advanced_fetching_options.get(KEY_CHUNK_SIZE),
-                                                       domain=params.get(KEY_DOMAIN))
+                                                       pk_chunking_size=advanced_fetching_options.get(KEY_CHUNK_SIZE))
 
         elif login_method == LoginType.CONNECTED_APP_OAUTH_CC:
             if not params.get(KEY_CONSUMER_KEY) or not params.get(KEY_CONSUMER_SECRET):
                 raise UserException("Missing Required Parameter : At least one of Consumer Key and Consumer Secret "
                                     "are missing.  They are both required when using Connected App Login")
-            if not params.get(KEY_DOMAIN):
+
+            if not (domain := params.get(KEY_DOMAIN)):
                 raise UserException("Parameter 'domain' is needed for Client Credentials Flow. ")
+            domain = self.process_salesforce_domain(domain)
+
             return SalesforceClient.from_connected_app_oauth_cc(consumer_key=params[KEY_CONSUMER_KEY],
                                                                 consumer_secret=params[KEY_CONSUMER_SECRET],
                                                                 api_version=params.get(
                                                                     KEY_API_VERSION, DEFAULT_API_VERSION),
-                                                                sandbox=params.get(KEY_SANDBOX),
-                                                                domain=params.get(KEY_DOMAIN))
+                                                                domain=domain)
 
     def _get_login_method(self) -> LoginType:
         login_type_name = self.configuration.parameters.get(KEY_LOGIN_METHOD, DEFAULT_LOGIN_METHOD)
@@ -374,6 +375,19 @@ class Component(ComponentBase):
         except ValueError as val_err:
             raise UserException(
                 f"'{login_type_name}' is not a valid Login Type. Enter one of : {LoginType.list()}") from val_err
+
+    @staticmethod
+    def process_salesforce_domain(url):
+        if url.startswith("http://"):
+            url = url[len("http://"):]
+        if url.startswith("https://"):
+            url = url[len("https://"):]
+        if url.endswith(".salesforce.com"):
+            url = url[:-len(".salesforce.com")]
+
+        logging.debug(f"The component will use {url} for Client Credentials Flow type authentication.")
+
+        return url
 
     @staticmethod
     def create_sliced_directory(table_path: str) -> None:

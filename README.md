@@ -65,7 +65,7 @@ Now you should see the Consumer details. Save the Key and Secret to a password m
 To enable client credentials flow, you need to create a Connected App in Salesforce. This process is described in **How to set up a Connected App** section above.
 The only difference will be checking **Enable Client Credentials Flow** for the Connected App.
 
-You need to fill in the **domain** field for this type of Authorization. For Keboola's Salesforce DEV account with website https://keboola-dev-ed.my.salesforce.com this value is **keboola-dev-ed.my**
+You also need to fill in the **domain** field for this type of Authorization.
 
 # Configuration
 

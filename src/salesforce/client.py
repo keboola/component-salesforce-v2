@@ -38,7 +38,8 @@ class SalesforceClientException(Exception):
 
 
 class SalesforceClient(SalesforceBulk):
-    def __init__(self, simple_client: Salesforce, api_version: str, pk_chunking_size: int = DEFAULT_CHUNK_SIZE) -> None:
+    def __init__(self, simple_client: Salesforce, api_version: str, pk_chunking_size: int = DEFAULT_CHUNK_SIZE,
+                 consumer_key: str = None, consumer_secret: str = None) -> None:
         # Initialize the client with from_connected_app or from_security_token, this creates a login with the
         # simple salesforce client. The simple_client sessionId is a Bearer token that is result of the login.
         super().__init__(sessionId=simple_client.session_id,
@@ -69,6 +70,15 @@ class SalesforceClient(SalesforceBulk):
         domain = 'test' if sandbox else domain
         simple_client = Salesforce(username=username, password=password, security_token=security_token,
                                    domain=domain, version=api_version)
+
+        return cls(simple_client=simple_client, api_version=api_version, pk_chunking_size=pk_chunking_size)
+
+    @classmethod
+    def from_connected_app_oauth_cc(cls, consumer_key: str, consumer_secret: str, domain: str, api_version: str,
+                                    pk_chunking_size: int = DEFAULT_CHUNK_SIZE):
+
+        simple_client = Salesforce(consumer_key=consumer_key, consumer_secret=consumer_secret, domain=domain,
+                                   version=api_version)
 
         return cls(simple_client=simple_client, api_version=api_version, pk_chunking_size=pk_chunking_size)
 

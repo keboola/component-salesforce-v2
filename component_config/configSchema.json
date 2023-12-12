@@ -14,12 +14,14 @@
       "type": "string",
       "enum": [
         "security_token",
-        "connected_app"
+        "connected_app",
+        "connected_app_oauth_cc"
       ],
       "options": {
         "enum_titles": [
           "Security Token with Username and Password",
-          "Connected App with Username and Password"
+          "Connected App with Username and Password",
+          "Connected App OAuth Client 2.0 Client Credentials"
         ]
       },
       "default": "security_token",
@@ -30,6 +32,14 @@
       "type": "string",
       "title": "Login Name",
       "default": "",
+      "options": {
+        "dependencies": {
+          "login_method": [
+            "security_token",
+            "connected_app"
+          ]
+        }
+      },
       "minLength": 1,
       "description": "Login name for Salesforce",
       "propertyOrder": 10
@@ -39,6 +49,14 @@
       "title": "Password",
       "format": "password",
       "default": "",
+      "options": {
+        "dependencies": {
+          "login_method": [
+            "security_token",
+            "connected_app"
+          ]
+        }
+      },
       "minLength": 1,
       "description": "Salesforce password",
       "propertyOrder": 20
@@ -56,13 +74,28 @@
       "description": "Salesforce security token",
       "propertyOrder": 30
     },
+    "domain": {
+      "type": "string",
+      "title": "Domain",
+      "default": "",
+      "options": {
+        "dependencies": {
+          "login_method": "connected_app_oauth_cc"
+        }
+      },
+      "description": "Your Salesforce Domain. For example: https://keboola-dev-ed.my.salesforce.com",
+      "propertyOrder": 30
+    },
     "#consumer_key": {
       "type": "string",
       "title": "Consumer Key",
       "format": "password",
       "options": {
         "dependencies": {
-          "login_method": "connected_app"
+          "login_method": [
+            "connected_app",
+            "connected_app_oauth_cc"
+          ]
         }
       },
       "description": "Salesforce Connected App Consumer Key",
@@ -74,7 +107,10 @@
       "format": "password",
       "options": {
         "dependencies": {
-          "login_method": "connected_app"
+          "login_method": [
+            "connected_app",
+            "connected_app_oauth_cc"
+          ]
         }
       },
       "description": "Salesforce Connected App Consumer Secret",
@@ -84,6 +120,14 @@
       "type": "boolean",
       "title": "Sandbox",
       "format": "checkbox",
+      "options": {
+        "dependencies": {
+          "login_method": [
+            "security_token",
+            "connected_app"
+          ]
+        }
+      },
       "description": "Download records from sandbox instead of the production environment.",
       "propertyOrder": 40
     },

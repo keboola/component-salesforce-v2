@@ -1,30 +1,27 @@
-import csv
-import logging
 import os
 import shutil
-from datetime import datetime
-from datetime import timezone
+from datetime import datetime, timezone
 from os import path, mkdir
 from collections import OrderedDict
+from typing import Dict, Iterator, List
+import logging
 
-from enum import Enum
-from typing import Dict
-from typing import Iterator
-from typing import List
-
+import csv
 import unicodecsv
+from retry import retry
+from enum import Enum
+
 from keboola.component.base import ComponentBase, sync_action
 from keboola.component.dao import TableMetadata, SupportedDataTypes
 from keboola.component.exceptions import UserException
 from keboola.component.sync_actions import SelectElement, ValidationResult, MessageType
 from keboola.utils.header_normalizer import get_normalizer, NormalizerStrategy
-from retry import retry
-from salesforce_bulk.salesforce_bulk import BulkApiError, BulkBatchFailed
-from simple_salesforce.exceptions import SalesforceAuthenticationFailed
-from simple_salesforce.exceptions import SalesforceResourceNotFound, SalesforceError
 
+from salesforce_bulk.salesforce_bulk import BulkApiError, BulkBatchFailed
+from simple_salesforce.exceptions import SalesforceAuthenticationFailed, SalesforceResourceNotFound, SalesforceError
 from salesforce.client import SalesforceClient, SalesforceClientException
 from salesforce.soql_query import SoqlQuery
+
 
 # default as previous versions of this component ex-salesforce-v2 had 40.0
 DEFAULT_API_VERSION = "42.0"
@@ -32,6 +29,7 @@ DEFAULT_API_VERSION = "42.0"
 KEY_LOGIN_METHOD = "login_method"
 KEY_CONSUMER_KEY = "#consumer_key"
 KEY_CONSUMER_SECRET = "#consumer_secret"
+KEY_DOMAIN = "domain"
 KEY_USERNAME = "username"
 KEY_PASSWORD = "#password"
 KEY_SECURITY_TOKEN = "#security_token"
@@ -68,7 +66,7 @@ RECORDS_NOT_FOUND = ['Records not found for this query']
 
 # list of mandatory parameters => if some is missing,
 # component will fail with readable message on initialization.
-REQUIRED_PARAMETERS = [KEY_USERNAME, KEY_PASSWORD, [KEY_SOQL_QUERY, KEY_OBJECT]]
+REQUIRED_PARAMETERS = [[KEY_SOQL_QUERY, KEY_OBJECT]]
 REQUIRED_IMAGE_PARS = []
 
 DEFAULT_LOGIN_METHOD = "security_token"
@@ -77,6 +75,7 @@ DEFAULT_LOGIN_METHOD = "security_token"
 class LoginType(str, Enum):
     SECURITY_TOKEN_LOGIN = "security_token"
     CONNECTED_APP_LOGIN = "connected_app"
+    CONNECTED_APP_OAUTH_CC = "connected_app_oauth_cc"
 
     @classmethod
     def list(cls):
@@ -331,8 +330,12 @@ class Component(ComponentBase):
 
         if login_method == LoginType.SECURITY_TOKEN_LOGIN:
             if not params.get(KEY_SECURITY_TOKEN):
-                raise UserException("Missing Required Parameter : Security Token. "
+                raise UserException("Missing Required Parameter: Security Token. "
                                     "It is required when using Security Token Login")
+
+            if not params.get(KEY_USERNAME) or not params.get(KEY_PASSWORD):
+                raise UserException("Missing Required Parameter: Both username and password are required for "
+                                    "Security Token Login.")
 
             return SalesforceClient.from_security_token(username=params.get(KEY_USERNAME),
                                                         password=params.get(KEY_PASSWORD),
@@ -340,10 +343,16 @@ class Component(ComponentBase):
                                                         sandbox=params.get(KEY_SANDBOX),
                                                         api_version=params.get(KEY_API_VERSION, DEFAULT_API_VERSION),
                                                         pk_chunking_size=advanced_fetching_options.get(KEY_CHUNK_SIZE))
+
         elif login_method == LoginType.CONNECTED_APP_LOGIN:
             if not params.get(KEY_CONSUMER_KEY) or not params.get(KEY_CONSUMER_SECRET):
-                raise UserException("Missing Required Parameter : At least one of Consumer Key and Consumer Secret "
-                                    "are missing.  They are both required when using Connected App Login")
+                raise UserException("Missing Required Parameter: At least one of Consumer Key and Consumer Secret "
+                                    "are missing. They are both required when using Connected App Login")
+
+            if not params.get(KEY_USERNAME) or not params.get(KEY_PASSWORD):
+                raise UserException("Missing Required Parameter: Both username and password are required for "
+                                    "Connected App Login.")
+
             return SalesforceClient.from_connected_app(username=params.get(KEY_USERNAME),
                                                        password=params.get(KEY_PASSWORD),
                                                        consumer_key=params.get(KEY_CONSUMER_KEY),
@@ -352,6 +361,21 @@ class Component(ComponentBase):
                                                        api_version=params.get(KEY_API_VERSION, DEFAULT_API_VERSION),
                                                        pk_chunking_size=advanced_fetching_options.get(KEY_CHUNK_SIZE))
 
+        elif login_method == LoginType.CONNECTED_APP_OAUTH_CC:
+            if not params.get(KEY_CONSUMER_KEY) or not params.get(KEY_CONSUMER_SECRET):
+                raise UserException("Missing Required Parameter: At least one of Consumer Key and Consumer Secret "
+                                    "are missing. They are both required when using Connected App Login")
+
+            if not (domain := params.get(KEY_DOMAIN)):
+                raise UserException("Parameter 'domain' is needed for Client Credentials Flow. ")
+            domain = self.process_salesforce_domain(domain)
+
+            return SalesforceClient.from_connected_app_oauth_cc(consumer_key=params[KEY_CONSUMER_KEY],
+                                                                consumer_secret=params[KEY_CONSUMER_SECRET],
+                                                                api_version=params.get(
+                                                                    KEY_API_VERSION, DEFAULT_API_VERSION),
+                                                                domain=domain)
+
     def _get_login_method(self) -> LoginType:
         login_type_name = self.configuration.parameters.get(KEY_LOGIN_METHOD, DEFAULT_LOGIN_METHOD)
         try:
@@ -359,6 +383,19 @@ class Component(ComponentBase):
         except ValueError as val_err:
             raise UserException(
                 f"'{login_type_name}' is not a valid Login Type. Enter one of : {LoginType.list()}") from val_err
+
+    @staticmethod
+    def process_salesforce_domain(url):
+        if url.startswith("http://"):
+            url = url[len("http://"):]
+        if url.startswith("https://"):
+            url = url[len("https://"):]
+        if url.endswith(".salesforce.com"):
+            url = url[:-len(".salesforce.com")]
+
+        logging.debug(f"The component will use {url} for Client Credentials Flow type authentication.")
+
+        return url
 
     @staticmethod
     def create_sliced_directory(table_path: str) -> None:

@@ -13,6 +13,7 @@ and saves it into the out/tables directory.
 In order to authorize the component you can select one of the two following methods of authorization:
 * With a username, password, and **Security Token** 
 * With a username, password, and **Connected App** 
+* With a Consumer Key and a Consumer Secret using **OAuth 2.0 Client Credentials Flow**
 
 In the below sections we describe how to get a security token, and how to set up a connected app.
 
@@ -59,6 +60,12 @@ You might be prompted to fill in a Verification Code. Fill it in.
 
 Now you should see the Consumer details. Save the Key and Secret to a password manager or other secure space.
 
+### Enabling Client Credentials Flow
+
+To enable client credentials flow, you need to create a Connected App in Salesforce. This process is described in **How to set up a Connected App** section above.
+The only difference will be checking **Enable Client Credentials Flow** for the Connected App.
+
+You also need to fill in the **domain** field for this type of Authorization.
 
 # Configuration
 

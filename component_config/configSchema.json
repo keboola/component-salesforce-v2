@@ -32,9 +32,12 @@
       "type": "string",
       "title": "Login Name",
       "default": "",
-            "options": {
+      "options": {
         "dependencies": {
-          "login_method": ["security_token", "connected_app"]
+          "login_method": [
+            "security_token",
+            "connected_app"
+          ]
         }
       },
       "minLength": 1,
@@ -46,9 +49,12 @@
       "title": "Password",
       "format": "password",
       "default": "",
-            "options": {
+      "options": {
         "dependencies": {
-          "login_method": ["security_token", "connected_app"]
+          "login_method": [
+            "security_token",
+            "connected_app"
+          ]
         }
       },
       "minLength": 1,
@@ -86,7 +92,10 @@
       "format": "password",
       "options": {
         "dependencies": {
-          "login_method": ["connected_app", "connected_app_oauth_cc"]
+          "login_method": [
+            "connected_app",
+            "connected_app_oauth_cc"
+          ]
         }
       },
       "description": "Salesforce Connected App Consumer Key",
@@ -98,7 +107,10 @@
       "format": "password",
       "options": {
         "dependencies": {
-          "login_method": ["connected_app", "connected_app_oauth_cc"]
+          "login_method": [
+            "connected_app",
+            "connected_app_oauth_cc"
+          ]
         }
       },
       "description": "Salesforce Connected App Consumer Secret",

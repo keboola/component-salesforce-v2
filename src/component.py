@@ -4,7 +4,6 @@ from datetime import datetime, timezone
 from os import path, mkdir
 from collections import OrderedDict
 from typing import Dict, Iterator, List
-from urllib.parse import urlparse
 import logging
 
 import csv

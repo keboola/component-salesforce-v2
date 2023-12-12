@@ -1,6 +1,4 @@
-import base64
 import logging
-from json import JSONDecodeError
 from time import sleep
 from urllib.parse import urlparse, urljoin
 import copy

@@ -1,5 +1,6 @@
 import os
 import shutil
+import traceback
 from datetime import datetime, timezone
 from os import path, mkdir
 from collections import OrderedDict
@@ -21,7 +22,6 @@ from salesforce_bulk.salesforce_bulk import BulkApiError, BulkBatchFailed
 from simple_salesforce.exceptions import SalesforceAuthenticationFailed, SalesforceResourceNotFound, SalesforceError
 from salesforce.client import SalesforceClient, SalesforceClientException
 from salesforce.soql_query import SoqlQuery
-
 
 # default as previous versions of this component ex-salesforce-v2 had 40.0
 DEFAULT_API_VERSION = "42.0"
@@ -320,7 +320,9 @@ class Component(ComponentBase):
         try:
             return self._login_to_salesforce(params)
         except SalesforceAuthenticationFailed as e:
-            raise UserException(f"Authentication Failed : recheck your authorization parameters : {e}") from e
+            raise UserException(
+                f"Authentication Failed : recheck your authorization parameters : {e},"
+                f" traceback : {traceback.format_exc()}") from e
 
     @retry(SalesforceAuthenticationFailed, tries=3, delay=5)
     def _login_to_salesforce(self, params: Dict) -> SalesforceClient:

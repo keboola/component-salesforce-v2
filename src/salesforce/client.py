@@ -216,7 +216,7 @@ class SalesforceClient(SalesforceBulk):
             raise SalesforceClientException(f"Cannot get query batch results, error: {e}") from e
 
         self.check_status(resp)
-        iterator = (x.replace(b'\0', b'') for x in resp.iter_lines(chunk_size=chunk_size))
+        iterator = (x.replace(b'\0', b' ') for x in resp.iter_lines(chunk_size=chunk_size))
         return iterator
 
     def build_query_from_string(self, soql_query_string: str) -> SoqlQuery:

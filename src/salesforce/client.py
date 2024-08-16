@@ -15,7 +15,6 @@ from collections import OrderedDict
 from .soql_query import SoqlQuery
 from typing import List, Tuple, Iterator, Any, Dict
 
-
 NON_SUPPORTED_BULK_FIELD_TYPES = ["address", "location", "base64"]
 
 # Some objects are not supported by bulk and there is no exact way to determine them, they must be set like this
@@ -216,8 +215,13 @@ class SalesforceClient(SalesforceBulk):
             raise SalesforceClientException(f"Cannot get query batch results, error: {e}") from e
 
         self.check_status(resp)
-        iterator = (x.replace(b'\0', b' ') for x in resp.iter_lines(chunk_size=chunk_size))
-        return iterator
+
+        # Read the content in chunks and join them
+        content = b''.join(resp.iter_content(chunk_size=chunk_size))
+        # Split the content into lines, keeping the line endings
+        lines = content.splitlines(keepends=True)
+        # Convert bytes to strings and yield each line
+        return (line.replace(b'\0', b'') for line in lines)
 
     def build_query_from_string(self, soql_query_string: str) -> SoqlQuery:
         try:

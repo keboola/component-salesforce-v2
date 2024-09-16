@@ -1,14 +1,11 @@
 import logging
-from time import sleep
-from urllib.parse import urlparse, urljoin
+from urllib.parse import urlparse
 import copy
 import backoff
-import requests
+from keboola.http_client import HttpClient
+from simple_salesforce.bulk2 import SFBulk2Handler, SFBulk2Type, QueryResult
 
-from salesforce_bulk import SalesforceBulk
-from salesforce_bulk.salesforce_bulk import BulkBatchFailed
-from simple_salesforce.exceptions import SalesforceExpiredSession, SalesforceMalformedRequest
-from salesforce_bulk.salesforce_bulk import DEFAULT_API_VERSION
+from simple_salesforce.exceptions import SalesforceExpiredSession, SalesforceMalformedRequest, SalesforceBulkV2LoadError
 from simple_salesforce import SFType, Salesforce
 
 from collections import OrderedDict
@@ -31,23 +28,31 @@ OBJECTS_NOT_SUPPORTED_BY_BULK = ["AccountFeed", "AssetFeed", "AccountHistory", "
 
 DEFAULT_CHUNK_SIZE = 100000
 
+# default as previous versions of this component ex-salesforce-v2 had 40.0
+DEFAULT_API_VERSION = "52.0"
+MAX_RETRIES = 3
+
 
 class SalesforceClientException(Exception):
     pass
 
 
-class SalesforceClient(SalesforceBulk):
+class SalesforceClient(HttpClient):
     def __init__(self, simple_client: Salesforce, api_version: str, pk_chunking_size: int = DEFAULT_CHUNK_SIZE,
                  consumer_key: str = None, consumer_secret: str = None) -> None:
         # Initialize the client with from_connected_app or from_security_token, this creates a login with the
         # simple salesforce client. The simple_client sessionId is a Bearer token that is result of the login.
-        super().__init__(sessionId=simple_client.session_id,
-                         host=simple_client.sf_instance,
-                         API_version=api_version)
+        super().__init__('NONE', max_retries=MAX_RETRIES)
+        self._consumer_key = consumer_key
+        self._consumer_secret = consumer_secret
         self.simple_client = simple_client
         self.pk_chunking_size = pk_chunking_size
         self.api_version = api_version
-        self.host = urlparse(self.endpoint).hostname
+        self.host = urlparse(self.simple_client.base_url).hostname
+        self.sessionId = self.simple_client.session_id
+        self.bulk2_handler = SFBulk2Handler(self.sessionId, self.simple_client.bulk2_url)
+        self.bul2_client = SFBulk2Type(self.sessionId, self.simple_client.bulk2_url, self.bulk2_handler.headers,
+                                       self.bulk2_handler.session)
 
     @classmethod
     def from_connected_app(cls, username: str, password: str, consumer_key: str, consumer_secret: str, sandbox: str,
@@ -119,109 +124,27 @@ class SalesforceClient(SalesforceBulk):
     def is_bulk_supported_field(field: OrderedDict) -> bool:
         return field["type"] not in NON_SUPPORTED_BULK_FIELD_TYPES
 
-    @backoff.on_exception(backoff.expo, SalesforceClientException, max_tries=3)
-    def run_query(self, soql_query: SoqlQuery, fail_on_error: bool = False) -> Iterator:
-        job = self.create_queryall_job(soql_query.sf_object, contentType='CSV', concurrency='Parallel')
-        batch = self.query(job, soql_query.query)
-        self.close_job(job)
-        logging.info(f"Running SOQL : {soql_query.query}")
-
+    def download(self, soql_query: SoqlQuery, path: str, fail_on_error: bool = False) -> List[QueryResult]:
         try:
-            while not self.is_batch_done(batch):
-                sleep(10)
-        except BulkBatchFailed as batch_fail:
+            return self.bul2_client.download(soql_query.query, path)
+        except SalesforceBulkV2LoadError as e:
             if fail_on_error:
-                raise SalesforceClientException(batch_fail.state_message)
-            logging.exception(batch_fail.state_message)
-        except ConnectionError as e:
-            raise SalesforceClientException(f"Encountered error when running query: {e}") from e
-        except SalesforceExpiredSession as e:
-            raise SalesforceClientException(f"Encountered Expired Session error when running query: {e}") from e
-
-        logging.info("SOQL ran successfully, fetching results")
-        batch_result = self.get_all_results_from_query_batch(batch)
-        return batch_result
+                raise SalesforceClientException(e)
+            logging.exception(e)
 
     def test_query(self, soql_query: SoqlQuery, add_limit: bool = False) -> Iterator:
         """Test query has been implemented to prevent long timeouts of batched queries."""
         test_query = copy.deepcopy(soql_query)
         if add_limit:
             test_query.add_limit()
-
         try:
             logging.info("Running test SOQL.")
-            result = self.run_query(test_query, fail_on_error=True)
+            result = self.simple_client.query(test_query.query)
         except (SalesforceMalformedRequest, SalesforceClientException):
             raise SalesforceClientException(f"Test Query {test_query.query} failed, please re-check the query.")
 
         logging.info("Test query has been successful.")
         return result
-
-    @backoff.on_exception(backoff.expo, SalesforceClientException, max_tries=3)
-    def run_chunked_query(self, soql_query):
-        job = self.create_queryall_job(soql_query.sf_object, contentType='CSV', concurrency='Parallel',
-                                       pk_chunking=self.pk_chunking_size)
-        self.query(job, soql_query.query)
-        logging.info(f"Running SOQL : {soql_query.query}")
-        try:
-            while self.job_status(job)['numberBatchesTotal'] != self.job_status(job)['numberBatchesCompleted']:
-                sleep(10)
-        except BulkBatchFailed as batch_fail:
-            logging.exception(batch_fail.state_message)
-        logging.info("SOQL ran successfully, fetching results")
-        batch_id_list = [batch['id'] for batch in self.get_batch_list(job) if batch['state'] == 'Completed']
-        return job, batch_id_list
-
-    def fetch_batch_results(self, job: str, batch_id_list: List[str]) -> Iterator:
-        for i, batch_id in enumerate(batch_id_list):
-            logging.info(f"Fetching batch results for batch {i + 1}/{len(batch_id_list)}, id : {batch_id}")
-            yield from self.get_all_results_from_query_batch(batch_id, job)
-        self.close_job(job)
-
-    def get_all_results_from_query_batch(self, batch_id: str, job_id: str = None, chunk_size: int = 8196) -> Iterator:
-        """
-        Gets result ids and generates each result set from the batch and returns it
-        as a generator fetching the next result set when needed
-
-        Args:
-            batch_id: id of batch
-            job_id: id of job, if not provided, it will be looked up
-            chunk_size : size of chunks for stream
-        """
-        result_ids = self.get_query_batch_result_ids(batch_id, job_id=job_id)
-        if not result_ids:
-            raise RuntimeError('Batch is not complete')
-        for result_id in result_ids:
-            yield self.get_query_batch_result(
-                batch_id,
-                result_id,
-                job_id=job_id,
-                chunk_size=chunk_size
-            )
-
-    @backoff.on_exception(backoff.expo, SalesforceClientException, max_tries=3)
-    def get_query_batch_result(self, batch_id: str, result_id: str, job_id: str = None,
-                               chunk_size: int = 8196) -> Iterator:
-        job_id = job_id or self.lookup_job_id(batch_id)
-        uri = urljoin(
-            self.endpoint + "/",
-            "job/{0}/batch/{1}/result/{2}".format(
-                job_id, batch_id, result_id),
-        )
-
-        try:
-            resp = requests.get(uri, headers=self.headers(), stream=True)
-        except ConnectionError as e:
-            raise SalesforceClientException(f"Cannot get query batch results, error: {e}") from e
-
-        self.check_status(resp)
-
-        # Read the content in chunks and join them
-        content = b''.join(resp.iter_content(chunk_size=chunk_size))
-        # Split the content into lines, keeping the line endings
-        lines = content.splitlines(keepends=True)
-        # Convert bytes to strings and yield each line
-        return (line.replace(b'\0', b'') for line in lines)
 
     def build_query_from_string(self, soql_query_string: str) -> SoqlQuery:
         try:

@@ -3,11 +3,10 @@ import shutil
 from datetime import datetime, timezone
 from os import path, mkdir
 from collections import OrderedDict
-from typing import Dict, Iterator, List
+from typing import Dict, List
 import logging
 
 import csv
-import unicodecsv
 from retry import retry
 from enum import Enum
 
@@ -17,14 +16,9 @@ from keboola.component.exceptions import UserException
 from keboola.component.sync_actions import SelectElement, ValidationResult, MessageType
 from keboola.utils.header_normalizer import get_normalizer, NormalizerStrategy
 
-from salesforce_bulk.salesforce_bulk import BulkApiError, BulkBatchFailed
 from simple_salesforce.exceptions import SalesforceAuthenticationFailed, SalesforceResourceNotFound, SalesforceError
-from salesforce.client import SalesforceClient, SalesforceClientException
+from salesforce.client import SalesforceClient, SalesforceClientException, DEFAULT_API_VERSION
 from salesforce.soql_query import SoqlQuery
-
-
-# default as previous versions of this component ex-salesforce-v2 had 40.0
-DEFAULT_API_VERSION = "42.0"
 
 KEY_LOGIN_METHOD = "login_method"
 KEY_CONSUMER_KEY = "#consumer_key"
@@ -140,20 +134,18 @@ class Component(ComponentBase):
 
         advanced_fetching_options = params.get(KEY_ADVANCED_FETCHING_OPTIONS, {})
         fetch_in_chunks = advanced_fetching_options.get(KEY_FETCH_IN_CHUNKS, False)
-        output_columns = []
 
         if fetch_in_chunks:
             self._test_query(salesforce_client, soql_query, True)
 
-            job_id, batch_ids = self.run_chunked_query(salesforce_client, soql_query)
-            for index, result in enumerate(self.fetch_chunked_result(salesforce_client, job_id, batch_ids)):
-                output_columns = self.write_results(result, table.full_path, index)
-                output_columns = self.normalize_column_names(output_columns)
-        else:
-            batch_results = self.run_query(salesforce_client, soql_query)
-            for index, result in enumerate(self.fetch_result(batch_results)):
-                output_columns = self.write_results(result, table.full_path, index)
-                output_columns = self.normalize_column_names(output_columns)
+        results = salesforce_client.download(soql_query, table.full_path)
+        logging.info(f'Downloaded {len(results)} files')
+        total_records = sum(result.get('number_of_records', 0) for result in results)
+        logging.info(f'Downloaded {total_records} records in total')
+
+        # remove headers and get columns
+        output_columns = self._fix_header_from_csv(results)
+        output_columns = self.normalize_column_names(output_columns)
 
         if not output_columns:
             if prev_output_columns:
@@ -174,6 +166,31 @@ class Component(ComponentBase):
                                    "prev_output_columns": output_columns})
         else:
             shutil.rmtree(table.full_path)
+
+    @staticmethod
+    def _fix_header_from_csv(results: List[dict]) -> List[str]:
+        expected_header = None
+        columns = []
+        for result in results:
+            result_file_path = result.get('file')
+            temp_file_path = f"{result_file_path}.tmp"
+            with (open(result_file_path, 'r', encoding='utf-8') as infile,
+                  open(temp_file_path, 'w', newline='', encoding='utf-8') as outfile):
+                reader = csv.reader(infile)
+                writer = csv.writer(outfile)
+                # check if header is same as in other files
+                actual_header = next(reader)
+                if expected_header:
+                    if actual_header != expected_header:
+                        raise UserException(f"Header in file {result_file_path} is different from expected. "
+                                            f"Expected: {expected_header}, Actual: {actual_header}")
+                else:
+                    expected_header = actual_header
+                columns.extend(actual_header)  # Also skip the header
+                for row in reader:
+                    writer.writerow(row)
+            os.replace(temp_file_path, result_file_path)
+        return columns
 
     def set_proxy(self) -> None:
         """Sets proxy if defined"""
@@ -403,39 +420,6 @@ class Component(ComponentBase):
         if not path.isdir(table_path):
             mkdir(table_path)
 
-    @retry(tries=3, delay=5)
-    def fetch_chunked_result(self, salesforce_client, job_id, batch_ids) -> Iterator:
-        try:
-            yield from salesforce_client.fetch_batch_results(job_id, batch_ids)
-        except BulkBatchFailed as bulk_err:
-            raise UserException(
-                "Invalid Query: Failed to process query. Check syntax, objects, and fields") from bulk_err
-        except SalesforceClientException as sf_err:
-            raise UserException() from sf_err
-
-    @retry(tries=3, delay=5)
-    def fetch_result(self, batch_results: Iterator) -> Iterator:
-        try:
-            yield from batch_results
-        except BulkBatchFailed as bulk_err:
-            raise UserException("Invalid Query: Failed to process query. "
-                                "Check syntax, objects, and fields") from bulk_err
-
-        except SalesforceClientException as sf_err:
-            raise UserException() from sf_err
-
-    @staticmethod
-    def write_results(result: Iterator, table: str, index: int) -> List[str]:
-        slice_path = path.join(table, str(index))
-        fieldnames = []
-        with open(slice_path, 'w+', newline='') as out:
-            reader = unicodecsv.DictReader(result)
-            if reader.fieldnames != RECORDS_NOT_FOUND:
-                fieldnames = reader.fieldnames
-                writer = csv.DictWriter(out, fieldnames=reader.fieldnames, lineterminator='\n', delimiter=',')
-                writer.writerows(reader)
-        return fieldnames
-
     def build_soql_query(self, salesforce_client: SalesforceClient, params: Dict, last_run: str) -> SoqlQuery:
         try:
             return self._build_soql_query(salesforce_client, params, last_run)
@@ -509,15 +493,6 @@ class Component(ComponentBase):
         bucket_name = f"kds-team-ex-salesforce-v2-{config_id}"
         return bucket_name
 
-    @staticmethod
-    def run_chunked_query(salesforce_client: SalesforceClient, soql_query: SoqlQuery) -> Iterator:
-        try:
-            return salesforce_client.run_chunked_query(soql_query)
-        except SalesforceClientException as sf_exc:
-            raise UserException(sf_exc) from sf_exc
-        except BulkApiError as sf_exc:
-            raise UserException(sf_exc) from sf_exc
-
     @sync_action('testConnection')
     def test_connection(self):
         """
@@ -527,7 +502,8 @@ class Component(ComponentBase):
         params = self.configuration.parameters
         self.get_salesforce_client(params)
 
-    def create_markdown_table(self, data):
+    @staticmethod
+    def create_markdown_table(data):
         if not data:
             return ""
         headers = list(data[0].keys())
@@ -537,6 +513,10 @@ class Component(ComponentBase):
             row_values = [str(row[header]) for header in headers]
             table += "| " + " | ".join(row_values) + " |\n"
         return table
+
+    @staticmethod
+    def parse_result(data: OrderedDict) -> dict:
+        return dict((k, v) for k, v in data.items() if k != "attributes")
 
     @sync_action('testQuery')
     def test_query(self):
@@ -550,10 +530,8 @@ class Component(ComponentBase):
             result = self._test_query(salesforce_client, soql_query, False)
             if not result:
                 return ValidationResult("Query returned no results", MessageType.WARNING)
-            for index, result in enumerate(self.fetch_result(result)):
-                reader = unicodecsv.DictReader(result)
-                for row in reader:
-                    data.append(row)
+            for index, result in enumerate(result.get("records", [])):
+                data.append(self.parse_result(result))
             markdown = self.create_markdown_table(data)
             return ValidationResult(markdown, "table")
         except UserException as e:
@@ -684,13 +662,6 @@ class Component(ComponentBase):
             raise UserException("Failed to determine fields from SOQL query, make sure the SOQL query is valid") from e
 
         return result.get("records")[0] if result.get("totalSize") == 1 else None
-
-    @staticmethod
-    def run_query(salesforce_client: SalesforceClient, soql_query: SoqlQuery) -> Iterator:
-        try:
-            return salesforce_client.run_query(soql_query)
-        except SalesforceClientException as sf_exc:
-            raise UserException(sf_exc) from sf_exc
 
 
 if __name__ == "__main__":

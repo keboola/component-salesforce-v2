@@ -174,8 +174,8 @@ class Component(ComponentBase):
         for result in results:
             result_file_path = result.get('file')
             temp_file_path = f"{result_file_path}.tmp"
-            with (open(result_file_path, 'r', encoding='utf-8') as infile, open(temp_file_path, 'w', newline='',
-                                                                                encoding='utf-8') as outfile):
+            with open(result_file_path, 'r', encoding='utf-8') as infile, open(temp_file_path, 'w', newline='',
+                                                                               encoding='utf-8') as outfile:
                 reader = csv.reader(infile)
                 writer = csv.writer(outfile)
                 # check if header is same as in other files

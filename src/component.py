@@ -141,6 +141,7 @@ class Component(ComponentBase):
         results = salesforce_client.download(soql_query, table.full_path)
         logging.info(f'Downloaded {len(results)} files')
         total_records = sum(result.get('number_of_records', 0) for result in results)
+        logging.debug([result for result in results])
         logging.info(f'Downloaded {total_records} records in total')
 
         # remove headers and get columns

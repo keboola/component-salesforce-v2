@@ -26,7 +26,7 @@ OBJECTS_NOT_SUPPORTED_BY_BULK = ["AccountFeed", "AssetFeed", "AccountHistory", "
                                  "ServiceAppointmentStatus", "SolutionStatus", "TaskPriority", "TaskStatus",
                                  "TaskWhoRelation", "UserRecordAccess", "WorkOrderLineItemStatus", "WorkOrderStatus"]
 
-DEFAULT_QUERY_PAGE_SIZE = 500
+DEFAULT_QUERY_PAGE_SIZE = 50000
 
 # default as previous versions of this component ex-salesforce-v2 had 40.0
 DEFAULT_API_VERSION = "52.0"
@@ -125,7 +125,10 @@ class SalesforceClient(HttpClient):
     def download(self, soql_query: SoqlQuery, path: str, fail_on_error: bool = False,
                  query_page_size: int = DEFAULT_QUERY_PAGE_SIZE) -> List[QueryResult]:
         try:
-            return self.bulk2_client.download(soql_query.query, path, max_records=query_page_size)
+            logging.info(f"Running SOQL : {soql_query.query}")
+            query_results = self.bulk2_client.download(soql_query.query, path, max_records=query_page_size)
+            logging.info("SOQL ran successfully")
+            return query_results
         except SalesforceBulkV2LoadError as e:
             if fail_on_error:
                 raise SalesforceClientException(e)

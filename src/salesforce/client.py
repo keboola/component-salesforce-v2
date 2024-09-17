@@ -4,9 +4,8 @@ import copy
 import backoff
 import os
 
-import requests
 from keboola.http_client import HttpClient
-from simple_salesforce.bulk2 import SFBulk2Handler, SFBulk2Type, QueryResult, Operation, ColumnDelimiter, LineEnding
+from simple_salesforce.bulk2 import SFBulk2Type, QueryResult, Operation, ColumnDelimiter, LineEnding
 
 from simple_salesforce.exceptions import SalesforceExpiredSession, SalesforceMalformedRequest, SalesforceBulkV2LoadError
 from simple_salesforce import SFType, Salesforce

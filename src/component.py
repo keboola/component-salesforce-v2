@@ -287,9 +287,6 @@ class Component(ComponentBase):
 
         if description:
             self._add_columns_to_table_metadata(tm, description, output_columns)
-            # TODO IMPLEMENT IN KCOFAC-2110
-            # self.add_table_metadata(tm, description)
-
         return tm
 
     @staticmethod
@@ -411,11 +408,11 @@ class Component(ComponentBase):
 
     @staticmethod
     def create_sliced_directory(table_path: str) -> None:
-        logging.info("Creating sliced file")
+        logging.info("Creating sliced directory")
         if not path.isdir(table_path):
             mkdir(table_path)
 
-    def build_soql_query(self, salesforce_client: SalesforceClient, params: Dict, last_run: str) -> SoqlQuery:
+    def build_soql_query(self, salesforce_client: SalesforceClient, params: Dict, last_run: str = None) -> SoqlQuery:
         try:
             return self._build_soql_query(salesforce_client, params, last_run)
         except (ValueError, TypeError) as query_error:
@@ -596,7 +593,7 @@ class Component(ComponentBase):
     def _get_object_name_from_custom_query(self) -> str:
         params = self.configuration.parameters
         salesforce_client = self.get_salesforce_client(params)
-        query = self.build_soql_query(salesforce_client, params, None)
+        query = self.build_soql_query(salesforce_client, params)
         return query.sf_object
 
     def _get_object_fields_names_and_normalized_values(self, object_name: str) -> List[SelectElement]:

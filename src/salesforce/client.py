@@ -54,29 +54,16 @@ class SalesforceBulk2(SFBulk2Type):
         if not os.path.exists(path):
             raise SalesforceBulkV2LoadError(f"Path does not exist: {path}")
 
-        res = self._client.create_job(
-            Operation.query_all,
-            query,
-            column_delimiter,
-            line_ending
-        )
+        res = self._client.create_job(Operation.query_all, query, column_delimiter, line_ending)
         job_id = res["id"]
-        self._client.wait_for_job(job_id,
-                                  True,
-                                  wait
-                                  )
+        self._client.wait_for_job(job_id, True, wait)
 
         results = []
         locator = "INIT"
         while locator:
             if locator == "INIT":
                 locator = ""
-            result = self._client.download_job_data(
-                path,
-                job_id,
-                locator,
-                max_records
-            )
+            result = self._client.download_job_data(path, job_id, locator, max_records)
             locator = result["locator"]
             results.append(result)
         return results

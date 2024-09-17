@@ -35,10 +35,6 @@ KEY_SOQL_QUERY = "soql_query"
 KEY_IS_DELETED = "is_deleted"
 KEY_FIELDS = 'fields'
 
-KEY_ADVANCED_FETCHING_OPTIONS = "advanced_fetching_options"
-KEY_FETCH_IN_CHUNKS = "fetch_in_chunks"
-KEY_CHUNK_SIZE = "chunk_size"
-
 KEY_BUCKET_NAME = "bucket_name"
 
 KEY_LOADING_OPTIONS = "loading_options"
@@ -132,11 +128,7 @@ class Component(ComponentBase):
 
         self.create_sliced_directory(table.full_path)
 
-        advanced_fetching_options = params.get(KEY_ADVANCED_FETCHING_OPTIONS, {})
-        fetch_in_chunks = advanced_fetching_options.get(KEY_FETCH_IN_CHUNKS, False)
-
-        if fetch_in_chunks:
-            self._test_query(salesforce_client, soql_query, True)
+        self._test_query(salesforce_client, soql_query, True)
 
         results = salesforce_client.download(soql_query, table.full_path)
         logging.info(f'Downloaded {len(results)} files')

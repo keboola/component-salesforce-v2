@@ -26,7 +26,7 @@ OBJECTS_NOT_SUPPORTED_BY_BULK = ["AccountFeed", "AssetFeed", "AccountHistory", "
                                  "ServiceAppointmentStatus", "SolutionStatus", "TaskPriority", "TaskStatus",
                                  "TaskWhoRelation", "UserRecordAccess", "WorkOrderLineItemStatus", "WorkOrderStatus"]
 
-DEFAULT_CHUNK_SIZE = 100000
+DEFAULT_QUERY_PAGE_SIZE = 500
 
 # default as previous versions of this component ex-salesforce-v2 had 40.0
 DEFAULT_API_VERSION = "52.0"
@@ -38,7 +38,7 @@ class SalesforceClientException(Exception):
 
 
 class SalesforceClient(HttpClient):
-    def __init__(self, simple_client: Salesforce, api_version: str, pk_chunking_size: int = DEFAULT_CHUNK_SIZE,
+    def __init__(self, simple_client: Salesforce, api_version: str,
                  consumer_key: str = None, consumer_secret: str = None) -> None:
         # Initialize the client with from_connected_app or from_security_token, this creates a login with the
         # simple salesforce client. The simple_client sessionId is a Bearer token that is result of the login.
@@ -46,45 +46,43 @@ class SalesforceClient(HttpClient):
         self._consumer_key = consumer_key
         self._consumer_secret = consumer_secret
         self.simple_client = simple_client
-        self.pk_chunking_size = pk_chunking_size
         self.api_version = api_version
         self.host = urlparse(self.simple_client.base_url).hostname
         self.sessionId = self.simple_client.session_id
-        self.bulk2_handler = SFBulk2Handler(self.sessionId, self.simple_client.bulk2_url)
-        self.bul2_client = SFBulk2Type(self.sessionId, self.simple_client.bulk2_url, self.bulk2_handler.headers,
-                                       self.bulk2_handler.session)
+        self.bulk2_client = self.get_bulk2_client()
+
+    def get_bulk2_client(self):
+        bulk2_handler = SFBulk2Handler(self.sessionId, self.simple_client.bulk2_url)
+        return SFBulk2Type(self.sessionId, self.simple_client.bulk2_url, bulk2_handler.headers, bulk2_handler.session)
 
     @classmethod
     def from_connected_app(cls, username: str, password: str, consumer_key: str, consumer_secret: str, sandbox: str,
-                           api_version: str = DEFAULT_API_VERSION, pk_chunking_size: int = DEFAULT_CHUNK_SIZE,
-                           domain: str = None):
+                           api_version: str = DEFAULT_API_VERSION, domain: str = None):
         domain = 'test' if sandbox else domain
 
         simple_client = Salesforce(username=username, password=password, consumer_secret=consumer_secret,
                                    consumer_key=consumer_key,
                                    domain=domain, version=api_version)
 
-        return cls(simple_client=simple_client, api_version=api_version, pk_chunking_size=pk_chunking_size)
+        return cls(simple_client=simple_client, api_version=api_version)
 
     @classmethod
     def from_security_token(cls, username: str, password: str, security_token: str, sandbox: str, api_version: str,
-                            pk_chunking_size: int = DEFAULT_CHUNK_SIZE,
                             domain: str = None):
 
         domain = 'test' if sandbox else domain
         simple_client = Salesforce(username=username, password=password, security_token=security_token,
                                    domain=domain, version=api_version)
 
-        return cls(simple_client=simple_client, api_version=api_version, pk_chunking_size=pk_chunking_size)
+        return cls(simple_client=simple_client, api_version=api_version)
 
     @classmethod
-    def from_connected_app_oauth_cc(cls, consumer_key: str, consumer_secret: str, domain: str, api_version: str,
-                                    pk_chunking_size: int = DEFAULT_CHUNK_SIZE):
+    def from_connected_app_oauth_cc(cls, consumer_key: str, consumer_secret: str, domain: str, api_version: str):
 
         simple_client = Salesforce(consumer_key=consumer_key, consumer_secret=consumer_secret, domain=domain,
                                    version=api_version)
 
-        return cls(simple_client=simple_client, api_version=api_version, pk_chunking_size=pk_chunking_size)
+        return cls(simple_client=simple_client, api_version=api_version)
 
     @backoff.on_exception(backoff.expo, SalesforceClientException, max_tries=3)
     def describe_object(self, sf_object: str) -> List[str]:
@@ -124,9 +122,10 @@ class SalesforceClient(HttpClient):
     def is_bulk_supported_field(field: OrderedDict) -> bool:
         return field["type"] not in NON_SUPPORTED_BULK_FIELD_TYPES
 
-    def download(self, soql_query: SoqlQuery, path: str, fail_on_error: bool = False) -> List[QueryResult]:
+    def download(self, soql_query: SoqlQuery, path: str, fail_on_error: bool = False,
+                 query_page_size: int = DEFAULT_QUERY_PAGE_SIZE) -> List[QueryResult]:
         try:
-            return self.bul2_client.download(soql_query.query, path)
+            return self.bulk2_client.download(soql_query.query, path, max_records=query_page_size)
         except SalesforceBulkV2LoadError as e:
             if fail_on_error:
                 raise SalesforceClientException(e)

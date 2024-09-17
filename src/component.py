@@ -103,13 +103,13 @@ class Component(ComponentBase):
         bucket_name = params.get(KEY_BUCKET_NAME, self.get_bucket_name())
         bucket_name = f"in.c-{bucket_name}"
 
-        statefile = self.get_state_file()
+        state_file = self.get_state_file()
 
-        last_run = statefile.get("last_run")
+        last_run = state_file.get("last_run")
         if not last_run:
             last_run = str(datetime(2000, 1, 1).strftime('%Y-%m-%dT%H:%M:%S.000Z'))
 
-        prev_output_columns = statefile.get("prev_output_columns")
+        prev_output_columns = state_file.get("prev_output_columns")
 
         pkey = loading_options.get(KEY_LOADING_OPTIONS_PKEY, [])
         incremental = loading_options.get(KEY_LOADING_OPTIONS_INCREMENTAL, False)
@@ -359,8 +359,7 @@ class Component(ComponentBase):
                                                         password=params.get(KEY_PASSWORD),
                                                         security_token=params.get(KEY_SECURITY_TOKEN),
                                                         sandbox=params.get(KEY_SANDBOX),
-                                                        api_version=params.get(KEY_API_VERSION, DEFAULT_API_VERSION),
-                                                        pk_chunking_size=advanced_fetching_options.get(KEY_CHUNK_SIZE))
+                                                        api_version=params.get(KEY_API_VERSION, DEFAULT_API_VERSION))
 
         elif login_method == LoginType.CONNECTED_APP_LOGIN:
             if not params.get(KEY_CONSUMER_KEY) or not params.get(KEY_CONSUMER_SECRET):
@@ -376,8 +375,7 @@ class Component(ComponentBase):
                                                        consumer_key=params.get(KEY_CONSUMER_KEY),
                                                        consumer_secret=params.get(KEY_CONSUMER_SECRET),
                                                        sandbox=params.get(KEY_SANDBOX),
-                                                       api_version=params.get(KEY_API_VERSION, DEFAULT_API_VERSION),
-                                                       pk_chunking_size=advanced_fetching_options.get(KEY_CHUNK_SIZE))
+                                                       api_version=params.get(KEY_API_VERSION, DEFAULT_API_VERSION))
 
         elif login_method == LoginType.CONNECTED_APP_OAUTH_CC:
             if not params.get(KEY_CONSUMER_KEY) or not params.get(KEY_CONSUMER_SECRET):

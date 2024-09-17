@@ -344,8 +344,6 @@ class Component(ComponentBase):
     def _login_to_salesforce(self, params: Dict) -> SalesforceClient:
         login_method = self._get_login_method()
 
-        advanced_fetching_options = params.get(KEY_ADVANCED_FETCHING_OPTIONS, {})
-
         if login_method == LoginType.SECURITY_TOKEN_LOGIN:
             if not params.get(KEY_SECURITY_TOKEN):
                 raise UserException("Missing Required Parameter: Security Token. "

@@ -2,8 +2,11 @@ import logging
 from urllib.parse import urlparse
 import copy
 import backoff
+import os
+
+import requests
 from keboola.http_client import HttpClient
-from simple_salesforce.bulk2 import SFBulk2Handler, SFBulk2Type, QueryResult
+from simple_salesforce.bulk2 import SFBulk2Handler, SFBulk2Type, QueryResult, Operation, ColumnDelimiter, LineEnding
 
 from simple_salesforce.exceptions import SalesforceExpiredSession, SalesforceMalformedRequest, SalesforceBulkV2LoadError
 from simple_salesforce import SFType, Salesforce
@@ -37,6 +40,49 @@ class SalesforceClientException(Exception):
     pass
 
 
+class SalesforceBulk2(SFBulk2Type):
+    def __init__(self, sf_client, object_name: str):
+        super().__init__(object_name, sf_client.bulk2_url, sf_client.headers, sf_client.session)
+
+    def download(self,
+                 query: str,
+                 path: str,
+                 max_records: int = DEFAULT_QUERY_PAGE_SIZE,
+                 column_delimiter: ColumnDelimiter = ColumnDelimiter.COMMA,
+                 line_ending: LineEnding = LineEnding.LF,
+                 wait: int = 5, ) -> List[QueryResult]:
+
+        if not os.path.exists(path):
+            raise SalesforceBulkV2LoadError(f"Path does not exist: {path}")
+
+        res = self._client.create_job(
+            Operation.query_all,
+            query,
+            column_delimiter,
+            line_ending
+        )
+        job_id = res["id"]
+        self._client.wait_for_job(job_id,
+                                  True,
+                                  wait
+                                  )
+
+        results = []
+        locator = "INIT"
+        while locator:
+            if locator == "INIT":
+                locator = ""
+            result = self._client.download_job_data(
+                path,
+                job_id,
+                locator,
+                max_records
+            )
+            locator = result["locator"]
+            results.append(result)
+        return results
+
+
 class SalesforceClient(HttpClient):
     def __init__(self, simple_client: Salesforce, api_version: str,
                  consumer_key: str = None, consumer_secret: str = None) -> None:
@@ -49,11 +95,6 @@ class SalesforceClient(HttpClient):
         self.api_version = api_version
         self.host = urlparse(self.simple_client.base_url).hostname
         self.sessionId = self.simple_client.session_id
-        self.bulk2_client = self.get_bulk2_client()
-
-    def get_bulk2_client(self):
-        bulk2_handler = SFBulk2Handler(self.sessionId, self.simple_client.bulk2_url)
-        return SFBulk2Type(self.sessionId, self.simple_client.bulk2_url, bulk2_handler.headers, bulk2_handler.session)
 
     @classmethod
     def from_connected_app(cls, username: str, password: str, consumer_key: str, consumer_secret: str, sandbox: str,
@@ -125,9 +166,12 @@ class SalesforceClient(HttpClient):
     def download(self, soql_query: SoqlQuery, path: str, fail_on_error: bool = False,
                  query_page_size: int = DEFAULT_QUERY_PAGE_SIZE) -> List[QueryResult]:
         try:
+            bulk2 = SalesforceBulk2(self.simple_client, soql_query.sf_object)
+
             logging.info(f"Running SOQL : {soql_query.query}")
-            query_results = self.bulk2_client.download(soql_query.query, path, max_records=query_page_size)
+            query_results = bulk2.download(soql_query.query, path, max_records=query_page_size)
             logging.info("SOQL ran successfully")
+
             return query_results
         except SalesforceBulkV2LoadError as e:
             if fail_on_error:

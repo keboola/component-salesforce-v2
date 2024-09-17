@@ -171,7 +171,6 @@ class Component(ComponentBase):
     @staticmethod
     def _fix_header_from_csv(results: List[dict]) -> List[str]:
         expected_header = None
-        columns = []
         for result in results:
             result_file_path = result.get('file')
             temp_file_path = f"{result_file_path}.tmp"
@@ -180,18 +179,17 @@ class Component(ComponentBase):
                 reader = csv.reader(infile)
                 writer = csv.writer(outfile)
                 # check if header is same as in other files
-                actual_header = next(reader)
+                actual_header = next(reader)  # Also skip the header
                 if expected_header:
                     if actual_header != expected_header:
                         raise UserException(f"Header in file {result_file_path} is different from expected. "
                                             f"Expected: {expected_header}, Actual: {actual_header}")
                 else:
                     expected_header = actual_header
-                columns.extend(actual_header)  # Also skip the header
                 for row in reader:
                     writer.writerow(row)
             os.replace(temp_file_path, result_file_path)
-        return columns
+        return expected_header
 
     def set_proxy(self) -> None:
         """Sets proxy if defined"""

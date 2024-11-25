@@ -203,6 +203,25 @@
           "propertyOrder": 200
         }
       }
-    }
+    },
+    "destination": {
+        "type": "object",
+        "title": "Destination",
+        "properties": {
+          "bucket_name": {
+            "type": "string",
+            "title": "Storage Bucket Name",
+            "description": "Override the default name of the bucket in Storage",
+            "propertyOrder": 10
+          },
+           "output_table_name": {
+            "type": "string",
+            "title": "Storage Table Name",
+            "description": "Override the default name of the table in Storage",
+            "propertyOrder": 20
+          }
+        },
+        "propertyOrder": 300
+      }
   }
 }

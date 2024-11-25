@@ -45,7 +45,6 @@ KEY_ADVANCED_FETCHING_OPTIONS = "advanced_fetching_options"
 KEY_FETCH_IN_CHUNKS = "fetch_in_chunks"
 KEY_CHUNK_SIZE = "chunk_size"
 
-KEY_DESTINATION = "destination"
 KEY_BUCKET_NAME = "bucket_name"
 KEY_OUTPUT_TABLE_NAME = "output_table_name"
 
@@ -108,7 +107,7 @@ class Component(ComponentBase):
         params = self.configuration.parameters
         loading_options = params.get(KEY_LOADING_OPTIONS, {})
 
-        bucket_name = params.get(KEY_DESTINATION, {}).get(KEY_BUCKET_NAME, self.get_bucket_name())
+        bucket_name = params.get(KEY_BUCKET_NAME, self.get_bucket_name())
         bucket_name = f"in.c-{bucket_name}"
 
         statefile = self.get_state_file()
@@ -132,7 +131,7 @@ class Component(ComponentBase):
 
         logging.info(f"Primary key : {pkey} set")
 
-        table_name = params.get(KEY_DESTINATION, {}).get(KEY_OUTPUT_TABLE_NAME, {}) or soql_query.sf_object
+        table_name = loading_options.get(KEY_OUTPUT_TABLE_NAME, False) or soql_query.sf_object
 
         table = self.create_out_table_definition(table_name,
                                                  primary_key=pkey,

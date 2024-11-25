@@ -46,6 +46,7 @@ KEY_FETCH_IN_CHUNKS = "fetch_in_chunks"
 KEY_CHUNK_SIZE = "chunk_size"
 
 KEY_BUCKET_NAME = "bucket_name"
+KEY_OUTPUT_TABLE_NAME = "output_table_name"
 
 KEY_LOADING_OPTIONS = "loading_options"
 KEY_LOADING_OPTIONS_INCREMENTAL = "incremental"
@@ -130,11 +131,13 @@ class Component(ComponentBase):
 
         logging.info(f"Primary key : {pkey} set")
 
-        table = self.create_out_table_definition(f'{soql_query.sf_object}',
+        table_name = loading_options.get(KEY_OUTPUT_TABLE_NAME, False) or soql_query.sf_object
+
+        table = self.create_out_table_definition(table_name,
                                                  primary_key=pkey,
                                                  incremental=incremental,
                                                  is_sliced=True,
-                                                 destination=f'{bucket_name}.{soql_query.sf_object}')
+                                                 destination=f'{bucket_name}.{table_name}')
 
         self.create_sliced_directory(table.full_path)
 

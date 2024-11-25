@@ -201,7 +201,13 @@
           "title": "Load type",
           "description": "If set to Incremental update, the result tables will be updated based on primary key and new records will be fetched. Full load overwrites the destination table each time.",
           "propertyOrder": 200
-        }
+        },
+        "output_table_name": {
+            "type": "string",
+            "title": "Storage Table Name",
+            "description": "Override the default name of the table in Storage",
+            "propertyOrder": 20
+          }
       }
     }
   }

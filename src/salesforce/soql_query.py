@@ -97,9 +97,12 @@ class SoqlQuery:
     @staticmethod
     def _add_to_where_clause(soql: str, new_where_string: str) -> str:
         and_string = " and "
-        where_location_start = soql.lower().find(" where ")
-        where_location_end = where_location_start + len(" where ")
-        if where_location_start > 0:
+
+        match = re.search(r'\bwhere\b', soql, re.IGNORECASE)
+
+        if match:
+            where_location_start = match.start()
+            where_location_end = match.end()
             before_where = soql[:where_location_start]
             after_where = soql[where_location_end:]
             new_query = "".join([before_where, new_where_string, and_string, after_where])

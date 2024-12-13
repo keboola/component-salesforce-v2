@@ -99,7 +99,7 @@ If "connected_app" login method:
 ## Load type
 If set to Incremental update, the result tables will be updated based on primary key. 
 Full load overwrites the destination table each time. 
-It can override the table name with the parameter "output_table_name" and the bucket with the parameter "bucket_name".
+It can override the table name with the parameter **output_table_name** and the bucket with the parameter **bucket_name**.
 
 ### Incremental fetching 
 

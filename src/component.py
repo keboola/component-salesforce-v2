@@ -118,7 +118,7 @@ class Component(ComponentBase):
         prev_output_columns = statefile.get("prev_output_columns")
 
         pkey = loading_options.get(KEY_LOADING_OPTIONS_PKEY, [])
-        incremental = loading_options.get(KEY_LOADING_OPTIONS_INCREMENTAL, False)
+        incremental = bool(loading_options.get(KEY_LOADING_OPTIONS_INCREMENTAL))
 
         self.validate_incremental_settings(incremental, pkey)
 

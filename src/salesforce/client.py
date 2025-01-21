@@ -9,7 +9,7 @@ from salesforce_bulk import SalesforceBulk
 from salesforce_bulk.salesforce_bulk import BulkBatchFailed
 from simple_salesforce.exceptions import SalesforceExpiredSession, SalesforceMalformedRequest
 from salesforce_bulk.salesforce_bulk import DEFAULT_API_VERSION
-from simple_salesforce import SFType, Salesforce
+from simple_salesforce.api import SFType, Salesforce
 
 from collections import OrderedDict
 from .soql_query import SoqlQuery

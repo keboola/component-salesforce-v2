@@ -1,18 +1,17 @@
-import logging
-from urllib.parse import urlparse
 import copy
-import backoff
+import logging
 import os
-
-from keboola.http_client import HttpClient
-from simple_salesforce.bulk2 import SFBulk2Type, QueryResult, Operation, ColumnDelimiter, LineEnding
-
-from simple_salesforce.exceptions import SalesforceExpiredSession, SalesforceMalformedRequest, SalesforceBulkV2LoadError
-from simple_salesforce import SFType, Salesforce
-
 from collections import OrderedDict
+from typing import Any, Dict, Iterator, List, Tuple
+from urllib.parse import urlparse
+
+import backoff
+from keboola.http_client import HttpClient
+from simple_salesforce.api import Salesforce, SFType
+from simple_salesforce.bulk2 import ColumnDelimiter, LineEnding, Operation, QueryResult, SFBulk2Type
+from simple_salesforce.exceptions import SalesforceBulkV2LoadError, SalesforceExpiredSession, SalesforceMalformedRequest
+
 from .soql_query import SoqlQuery
-from typing import List, Tuple, Iterator, Any, Dict
 
 NON_SUPPORTED_BULK_FIELD_TYPES = ["address", "location", "base64"]
 

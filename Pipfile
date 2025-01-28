@@ -1,0 +1,20 @@
+[[source]]
+url = "https://pypi.org/simple"
+verify_ssl = true
+name = "pypi"
+
+[packages]
+"keboola.component" = "*"
+"keboola.http-client" = "*"
+"keboola.utils" = "*"
+backoff = "*"
+freezegun = "*"
+mock = "*"
+retry = "*"
+salesforce-bulk = "==2.2.0"
+
+[dev-packages]
+
+[requires]
+python_version = "3.13"
+python_full_version = "3.13.1"

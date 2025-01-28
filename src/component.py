@@ -36,6 +36,7 @@ KEY_IS_DELETED = "is_deleted"
 KEY_FIELDS = 'fields'
 
 KEY_BUCKET_NAME = "bucket_name"
+KEY_OUTPUT_TABLE_NAME = "output_table_name"
 
 KEY_LOADING_OPTIONS = "loading_options"
 KEY_LOADING_OPTIONS_INCREMENTAL = "incremental"
@@ -108,24 +109,21 @@ class Component(ComponentBase):
         prev_output_columns = state_file.get("prev_output_columns")
 
         pkey = loading_options.get(KEY_LOADING_OPTIONS_PKEY, [])
-        incremental = loading_options.get(KEY_LOADING_OPTIONS_INCREMENTAL, False)
+        incremental = bool(loading_options.get(KEY_LOADING_OPTIONS_INCREMENTAL))
 
         self.validate_incremental_settings(incremental, pkey)
 
         salesforce_client = self.get_salesforce_client(params)
-
         soql_query = self.build_soql_query(salesforce_client, params, last_run)
-
         self.validate_soql_query(soql_query, pkey)
-
         logging.info(f"Primary key : {pkey} set")
 
-        table = self.create_out_table_definition(f'{soql_query.sf_object}',
+        table_name = loading_options.get(KEY_OUTPUT_TABLE_NAME, False) or soql_query.sf_object
+        table = self.create_out_table_definition(table_name,
                                                  primary_key=pkey,
                                                  incremental=incremental,
                                                  is_sliced=True,
-                                                 destination=f'{bucket_name}.{soql_query.sf_object}')
-
+                                                 destination=f'{bucket_name}.{table_name}')
         self.create_sliced_directory(table.full_path)
 
         self._test_query(salesforce_client, soql_query, True)
@@ -315,6 +313,7 @@ class Component(ComponentBase):
 
     @staticmethod
     def validate_soql_query(soql_query: SoqlQuery, pkey: List[str]) -> None:
+        logging.info("Validating SOQL query")
         missing_keys = soql_query.check_pkey_in_query(pkey)
         if missing_keys:
             raise UserException(f"Private Keys {missing_keys} not in query, Add to SOQL query or check that it exists"
@@ -323,6 +322,7 @@ class Component(ComponentBase):
     def get_salesforce_client(self, params: Dict) -> SalesforceClient:
         self.set_proxy()
         try:
+            logging.info("Logging in to Salesforce")
             return self._login_to_salesforce(params)
         except SalesforceAuthenticationFailed as e:
             raise UserException(f"Authentication Failed : recheck your authorization parameters : {e}") from e
@@ -404,8 +404,9 @@ class Component(ComponentBase):
         if not path.isdir(table_path):
             mkdir(table_path)
 
-    def build_soql_query(self, salesforce_client: SalesforceClient, params: Dict, last_run: str = None) -> SoqlQuery:
+    def build_soql_query(self, salesforce_client: SalesforceClient, params: Dict, last_run: str) -> SoqlQuery:
         try:
+            logging.info("Building SOQL query")
             return self._build_soql_query(salesforce_client, params, last_run)
         except (ValueError, TypeError) as query_error:
             raise UserException(query_error) from query_error
@@ -514,7 +515,7 @@ class Component(ComponentBase):
             result = self._test_query(salesforce_client, soql_query, False)
             if not result:
                 return ValidationResult("Query returned no results", MessageType.WARNING)
-            for index, result in enumerate(result.get("records", [])):
+            for _, result in enumerate(result.get("records", [])):
                 data.append(self.parse_result(result))
             markdown = self.create_markdown_table(data)
             return ValidationResult(markdown, "table")

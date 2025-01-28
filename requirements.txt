@@ -1,9 +1,8 @@
-mock~=4.0.3
-freezegun~=1.1.0
-keboola.http-client==1.0.0
-keboola.component==1.4.2
-keboola.utils==1.1.0
-salesforce_bulk==2.2.0
-unicodecsv~=0.14.1
-backoff
-retry
+backoff==2.2.1; python_version >= '3.7' and python_version < '4.0'
+freezegun==1.5.1; python_version >= '3.7'
+keboola.component==1.6.10; python_version >= '3.7'
+keboola.http-client==1.0.1; python_version >= '3.7'
+keboola.utils==1.1.0; python_version >= '3.7'
+mock==5.1.0; python_version >= '3.6'
+retry==0.9.2
+salesforce-bulk==2.2.0

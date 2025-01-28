@@ -1,23 +1,21 @@
+import csv
+import logging
 import os
 import shutil
-from datetime import datetime, timezone
-from os import path, mkdir
 from collections import OrderedDict
-from typing import Dict, List
-import logging
-
-import csv
-from retry import retry
+from datetime import datetime, timezone
 from enum import Enum
+from os import mkdir, path
 
 from keboola.component.base import ComponentBase, sync_action
-from keboola.component.dao import TableMetadata, SupportedDataTypes
+from keboola.component.dao import SupportedDataTypes, TableMetadata
 from keboola.component.exceptions import UserException
-from keboola.component.sync_actions import SelectElement, ValidationResult, MessageType
-from keboola.utils.header_normalizer import get_normalizer, NormalizerStrategy
+from keboola.component.sync_actions import MessageType, SelectElement, ValidationResult
+from keboola.utils.header_normalizer import NormalizerStrategy, get_normalizer
+from retry import retry
+from simple_salesforce.exceptions import SalesforceAuthenticationFailed, SalesforceError, SalesforceResourceNotFound
 
-from simple_salesforce.exceptions import SalesforceAuthenticationFailed, SalesforceResourceNotFound, SalesforceError
-from salesforce.client import SalesforceClient, SalesforceClientException, DEFAULT_API_VERSION
+from salesforce.client import DEFAULT_API_VERSION, SalesforceClient, SalesforceClientException
 from salesforce.soql_query import SoqlQuery
 
 KEY_LOGIN_METHOD = "login_method"
@@ -33,7 +31,7 @@ KEY_OBJECT = "object"
 KEY_QUERY_TYPE = "query_type_selector"
 KEY_SOQL_QUERY = "soql_query"
 KEY_IS_DELETED = "is_deleted"
-KEY_FIELDS = 'fields'
+KEY_FIELDS = "fields"
 
 KEY_BUCKET_NAME = "bucket_name"
 KEY_OUTPUT_TABLE_NAME = "output_table_name"
@@ -53,7 +51,7 @@ KEY_PROXY_USERNAME = "username"
 KEY_PROXY_PASSWORD = "#password"
 KEY_USE_HTTP_PROXY_AS_HTTPS = "use_http_proxy_as_https"
 
-RECORDS_NOT_FOUND = ['Records not found for this query']
+RECORDS_NOT_FOUND = ["Records not found for this query"]
 
 # list of mandatory parameters => if some is missing,
 # component will fail with readable message on initialization.
@@ -159,7 +157,7 @@ class Component(ComponentBase):
             shutil.rmtree(table.full_path)
 
     @staticmethod
-    def _fix_header_from_csv(results: List[dict]) -> List[str]:
+    def _fix_header_from_csv(results: list[dict]) -> list[str]:
         expected_header = None
         for result in results:
             result_file_path = result.get('file')
@@ -306,20 +304,20 @@ class Component(ComponentBase):
             return SupportedDataTypes["STRING"].value
 
     @staticmethod
-    def validate_incremental_settings(incremental: bool, pkey: List[str]) -> None:
+    def validate_incremental_settings(incremental: bool, pkey: list[str]) -> None:
         if incremental and not pkey:
             raise UserException("Incremental load is set but no private key. Specify a private key in the "
                                 "configuration parameters")
 
     @staticmethod
-    def validate_soql_query(soql_query: SoqlQuery, pkey: List[str]) -> None:
+    def validate_soql_query(soql_query: SoqlQuery, pkey: list[str]) -> None:
         logging.info("Validating SOQL query")
         missing_keys = soql_query.check_pkey_in_query(pkey)
         if missing_keys:
             raise UserException(f"Private Keys {missing_keys} not in query, Add to SOQL query or check that it exists"
                                 f" in the Salesforce object.")
 
-    def get_salesforce_client(self, params: Dict) -> SalesforceClient:
+    def get_salesforce_client(self, params: dict) -> SalesforceClient:
         self.set_proxy()
         try:
             logging.info("Logging in to Salesforce")
@@ -328,7 +326,7 @@ class Component(ComponentBase):
             raise UserException(f"Authentication Failed : recheck your authorization parameters : {e}") from e
 
     @retry(SalesforceAuthenticationFailed, tries=3, delay=5)
-    def _login_to_salesforce(self, params: Dict) -> SalesforceClient:
+    def _login_to_salesforce(self, params: dict) -> SalesforceClient:
         login_method = self._get_login_method()
 
         if login_method == LoginType.SECURITY_TOKEN_LOGIN:
@@ -404,7 +402,7 @@ class Component(ComponentBase):
         if not path.isdir(table_path):
             mkdir(table_path)
 
-    def build_soql_query(self, salesforce_client: SalesforceClient, params: Dict, last_run: str) -> SoqlQuery:
+    def build_soql_query(self, salesforce_client: SalesforceClient, params: dict, last_run: str = "") -> SoqlQuery:
         try:
             logging.info("Building SOQL query")
             return self._build_soql_query(salesforce_client, params, last_run)
@@ -412,7 +410,7 @@ class Component(ComponentBase):
             raise UserException(query_error) from query_error
 
     @staticmethod
-    def _build_soql_query(salesforce_client: SalesforceClient, params: Dict, last_run: str) -> SoqlQuery:
+    def _build_soql_query(salesforce_client: SalesforceClient, params: dict, last_run: str) -> SoqlQuery:
         loading_options = params.get(KEY_LOADING_OPTIONS, {})
         salesforce_object = params.get(KEY_OBJECT)
         soql_query_string = params.get(KEY_SOQL_QUERY)
@@ -467,7 +465,7 @@ class Component(ComponentBase):
         return soql_query
 
     @staticmethod
-    def normalize_column_names(output_columns: List[str]) -> List[str]:
+    def normalize_column_names(output_columns: list[str]) -> list[str]:
         header_normalizer = get_normalizer(strategy=NormalizerStrategy.DEFAULT, forbidden_sub="_")
         return header_normalizer.normalize_header(output_columns)
 
@@ -523,7 +521,7 @@ class Component(ComponentBase):
             return ValidationResult(f"Query Failed: {e}", MessageType.WARNING)
 
     @sync_action('loadObjects')
-    def load_possible_objects(self) -> List[SelectElement]:
+    def load_possible_objects(self) -> list[SelectElement]:
         """
         Finds all possible objects in Salesforce that can be fetched by the Bulk API
 
@@ -536,7 +534,7 @@ class Component(ComponentBase):
         return [SelectElement(**c) for c in salesforce_client.get_bulk_fetchable_objects()]
 
     @sync_action("loadFields")
-    def load_fields(self) -> List[SelectElement]:
+    def load_fields(self) -> list[SelectElement]:
         """Returns fields available for selected object."""
         params = self.configuration.parameters
         object_name = params.get("object")
@@ -545,7 +543,7 @@ class Component(ComponentBase):
         return [SelectElement(label=f'{field[0]} ({field[1]})', value=field[0]) for field in descriptions]
 
     @sync_action("loadPossibleIncrementalField")
-    def load_possible_incremental_field(self) -> List[SelectElement]:
+    def load_possible_incremental_field(self) -> list[SelectElement]:
         """
         Gets all possible fields of a Salesforce object. It determines the name of the SF object either from the input
         object name or from the SOQL query. This data is used to select an incremental field
@@ -563,7 +561,7 @@ class Component(ComponentBase):
         return self._get_object_fields_names_and_values(object_name)
 
     @sync_action("loadPossiblePrimaryKeys")
-    def load_possible_primary_keys(self) -> List[SelectElement]:
+    def load_possible_primary_keys(self) -> list[SelectElement]:
         """
         Gets all possible primary keys of the data returned of a saleforce object. If the exact object is specified,
         each field is returned, if a query is specified, it is run with LIMIT 1 and the returned data is analyzed to
@@ -589,7 +587,7 @@ class Component(ComponentBase):
         query = self.build_soql_query(salesforce_client, params)
         return query.sf_object
 
-    def _get_object_fields_names_and_normalized_values(self, object_name: str) -> List[SelectElement]:
+    def _get_object_fields_names_and_normalized_values(self, object_name: str) -> list[SelectElement]:
         """
         Return object fields for sync action
 
@@ -603,16 +601,16 @@ class Component(ComponentBase):
         column_values = self.normalize_column_names(columns)
         return [SelectElement(label=column, value=column_values[i]) for i, column in enumerate(columns)]
 
-    def _get_object_fields_names_and_values(self, object_name: str) -> List[SelectElement]:
+    def _get_object_fields_names_and_values(self, object_name: str) -> list[SelectElement]:
         columns = self._get_fields_of_object_by_name(object_name)
         return [SelectElement(label=column, value=column) for column in columns]
 
-    def _get_fields_of_object_by_name(self, object_name: str) -> List[str]:
+    def _get_fields_of_object_by_name(self, object_name: str) -> list[str]:
         params = self.configuration.parameters
         salesforce_client = self.get_salesforce_client(params)
         return salesforce_client.describe_object(object_name)
 
-    def _get_object_fields_from_query(self) -> List[SelectElement]:
+    def _get_object_fields_from_query(self) -> list[SelectElement]:
         """
         Return object fields for sync action
         Returns:
@@ -631,7 +629,7 @@ class Component(ComponentBase):
 
         return [SelectElement(label=column, value=column_values[i]) for i, column in enumerate(columns)]
 
-    def _get_first_result_from_custom_soql(self) -> Dict:
+    def _get_first_result_from_custom_soql(self) -> dict:
         params = self.configuration.parameters
         salesforce_client = self.get_salesforce_client(params)
         query = params.get(KEY_SOQL_QUERY)

@@ -2,7 +2,7 @@ import copy
 import logging
 import os
 from collections import OrderedDict
-from typing import Any, Dict, Iterator, List, Tuple
+from typing import Any, Iterator
 from urllib.parse import urlparse
 
 import backoff
@@ -48,7 +48,7 @@ class SalesforceBulk2(SFBulk2Type):
                  max_records: int = DEFAULT_QUERY_PAGE_SIZE,
                  column_delimiter: ColumnDelimiter = ColumnDelimiter.COMMA,
                  line_ending: LineEnding = LineEnding.LF,
-                 wait: int = 5, ) -> List[QueryResult]:
+                 wait: int = 5, ) -> list[QueryResult]:
 
         if not os.path.exists(path):
             raise SalesforceBulkV2LoadError(f"Path does not exist: {path}")
@@ -111,7 +111,7 @@ class SalesforceClient(HttpClient):
         return cls(simple_client=simple_client, api_version=api_version)
 
     @backoff.on_exception(backoff.expo, SalesforceClientException, max_tries=3)
-    def describe_object(self, sf_object: str) -> List[str]:
+    def describe_object(self, sf_object: str) -> list[str]:
         salesforce_type = SFType(sf_object, self.sessionId, self.host, sf_version=self.api_version)
 
         try:
@@ -122,7 +122,7 @@ class SalesforceClient(HttpClient):
         return [field['name'] for field in object_desc['fields'] if self.is_bulk_supported_field(field)]
 
     @backoff.on_exception(backoff.expo, SalesforceClientException, max_tries=3)
-    def describe_object_w_metadata(self, sf_object: str) -> List[Tuple[str, str]]:
+    def describe_object_w_metadata(self, sf_object: str) -> list[tuple[str, str]]:
         salesforce_type = SFType(sf_object, self.sessionId, self.host, sf_version=self.api_version)
 
         try:
@@ -134,7 +134,7 @@ class SalesforceClient(HttpClient):
                 if self.is_bulk_supported_field(field)]
 
     @backoff.on_exception(backoff.expo, SalesforceClientException, max_tries=3)
-    def describe_object_w_complete_metadata(self, sf_object: str) -> Dict[str, Any]:
+    def describe_object_w_complete_metadata(self, sf_object: str) -> dict[str, Any]:
         salesforce_type = SFType(sf_object, self.sessionId, self.host, sf_version=self.api_version)
 
         try:
@@ -149,7 +149,7 @@ class SalesforceClient(HttpClient):
         return field["type"] not in NON_SUPPORTED_BULK_FIELD_TYPES
 
     def download(self, soql_query: SoqlQuery, path: str, fail_on_error: bool = False,
-                 query_page_size: int = DEFAULT_QUERY_PAGE_SIZE) -> List[QueryResult]:
+                 query_page_size: int = DEFAULT_QUERY_PAGE_SIZE) -> list[QueryResult]:
         try:
             bulk2 = SalesforceBulk2(self.simple_client, soql_query.sf_object)
 
@@ -200,6 +200,6 @@ class SalesforceClient(HttpClient):
         # Only objects with the 'queryable' set to True and ones that are not in the OBJECTS_NOT_SUPPORTED_BY_BULK are
         # queryable by the Bulk API. This list might not be exact, and some edge-cases might have to be addressed.
         for sf_object in all_s_objects:
-            if sf_object.get('queryable') and not sf_object.get('name') in OBJECTS_NOT_SUPPORTED_BY_BULK:
-                to_fetch.append({"label": sf_object.get('label'), 'value': sf_object.get('name')})
+            if sf_object.get("queryable") and sf_object.get("name") not in OBJECTS_NOT_SUPPORTED_BY_BULK:
+                to_fetch.append({"label": sf_object.get("label"), "value": sf_object.get("name")})
         return to_fetch

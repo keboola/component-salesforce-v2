@@ -1,7 +1,7 @@
 import logging
 import re
 from enum import Enum
-from typing import List, Callable
+from typing import Callable
 
 
 class QueryType(Enum):
@@ -9,7 +9,7 @@ class QueryType(Enum):
 
 
 class SoqlQuery:
-    def __init__(self, query: str, sf_object: str, sf_object_fields: List[str], query_type="get"):
+    def __init__(self, query: str, sf_object: str, sf_object_fields: list[str], query_type="get"):
         self.sf_object_fields = sf_object_fields
         self.sf_object = sf_object
         self.query = query
@@ -42,11 +42,11 @@ class SoqlQuery:
         return SoqlQuery(query_string, sf_object, sf_object_fields, query_type)
 
     @staticmethod
-    def _list_to_lower(str_list: List[str]) -> List[str]:
+    def _list_to_lower(str_list: list[str]) -> list[str]:
         return [x.lower() for x in str_list]
 
     @staticmethod
-    def _construct_soql_from_fields(sf_object: str, sf_object_fields: List[str]) -> str:
+    def _construct_soql_from_fields(sf_object: str, sf_object_fields: list[str]) -> str:
         soql_query = f"SELECT {','.join(sf_object_fields)} FROM {sf_object}"
         return soql_query
 
@@ -110,7 +110,7 @@ class SoqlQuery:
             new_query = "".join([soql, new_where_string])
         return new_query
 
-    def check_pkey_in_query(self, pkeys: List[str]) -> List:
+    def check_pkey_in_query(self, pkeys: list[str]) -> list:
         missing_keys = []
         # split a string by space, comma, and period characters
         query_words = re.split("\\s|(?<!\\d)[,.](?!\\d)", self.query.lower())

@@ -96,34 +96,6 @@
       "description": "Fetch records that have been deleted",
       "propertyOrder": 6
     },
-    "advanced_fetching_options": {
-      "type": "object",
-      "title": "Advanced Fetching Options",
-      "propertyOrder": 50,
-      "properties": {
-        "fetch_in_chunks": {
-          "title": "Fetch Data in chunks",
-          "type": "boolean",
-          "format": "checkbox",
-          "default": false,
-          "description": "If set to true, the object will be fetched in chunks based on primary keys, use for objects that support pk_chunking when data sizes are above 900MB",
-          "propertyOrder": 10
-        },
-        "chunk_size": {
-          "title": "Chunk Size",
-          "type": "integer",
-          "default": 100000,
-          "minimum": 100,
-          "options": {
-            "dependencies": {
-              "fetch_in_chunks": true
-            }
-          },
-          "description": "Size of chunks for each batch",
-          "propertyOrder": 20
-        }
-      }
-    },
     "loading_options": {
       "type": "object",
       "title": "Loading Options",

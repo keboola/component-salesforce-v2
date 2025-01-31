@@ -116,7 +116,7 @@ the component. This is done by specifying an incremental field in the object tha
     "#password": "password",
     "#security_token": "token_here",
     "sandbox": false,
-    "api_version" : "39.0",
+    "api_version" : "52.0",
     "object": "Contact",
     "soql_query": "select Id, FirstName,LastName,isdeleted,lastmodifieddate from Contact",
     "is_deleted": false,

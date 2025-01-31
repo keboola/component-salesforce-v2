@@ -4,13 +4,14 @@ verify_ssl = true
 name = "pypi"
 
 [packages]
-mock = "*"
-freezegun = "*"
 "keboola.component" = "*"
+"keboola.http-client" = "*"
 "keboola.utils" = "*"
-salesforce-bulk = "==2.2.0"
 backoff = "*"
+freezegun = "*"
+mock = "*"
 retry = "*"
+salesforce-bulk = "==2.2.0"
 
 [dev-packages]
 

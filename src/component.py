@@ -142,7 +142,7 @@ class Component(ComponentBase):
             elif params.get(KEY_QUERY_TYPE) == "Object":
                 output_columns = soql_query.sf_object_fields
 
-        table.columns = output_columns
+        table.schema = output_columns
 
         if output_columns:
 

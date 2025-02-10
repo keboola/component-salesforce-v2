@@ -8,7 +8,7 @@ from enum import Enum
 from os import mkdir, path
 
 from keboola.component.base import ComponentBase, sync_action
-from keboola.component.dao import SupportedDataTypes, TableMetadata
+from keboola.component.dao import SupportedDataTypes, BaseType, ColumnDefinition
 from keboola.component.exceptions import UserException
 from keboola.component.sync_actions import MessageType, SelectElement, ValidationResult
 from keboola.utils.header_normalizer import NormalizerStrategy, get_normalizer
@@ -118,7 +118,6 @@ class Component(ComponentBase):
 
         table_name = loading_options.get(KEY_OUTPUT_TABLE_NAME, False) or soql_query.sf_object
         table = self.create_out_table_definition(table_name,
-                                                 primary_key=pkey,
                                                  incremental=incremental,
                                                  is_sliced=True,
                                                  destination=f'{bucket_name}.{table_name}')
@@ -142,13 +141,10 @@ class Component(ComponentBase):
             elif params.get(KEY_QUERY_TYPE) == "Object":
                 output_columns = soql_query.sf_object_fields
 
-        table.schema = output_columns
-
         if output_columns:
+            query_type = params.get(KEY_QUERY_TYPE) == "Object"
 
-            if params.get(KEY_QUERY_TYPE) == "Object":
-                tm = self._store_metadata(salesforce_client, soql_query.sf_object, table, output_columns)
-                table.table_metadata = tm
+            table.schema = self._get_schema(salesforce_client, query_type, soql_query.sf_object, output_columns, pkey)
 
             self.write_manifest(table)
             self.write_state_file({"last_run": start_run_time,
@@ -269,32 +265,45 @@ class Component(ComponentBase):
             value = ordereddict_to_dict(value)
             recursive_flatten(key, value)
 
-    def _store_metadata(self, salesforce_client, sf_object, table, output_columns):
-        description = self.get_description(salesforce_client, sf_object)
-        tm = TableMetadata(table.get_manifest_dictionary())
+    def _get_schema(self, salesforce_client, query_type, sf_object, output_columns, pkey):
+        if query_type == "Object":
+            fields_all = self.get_description(salesforce_client, sf_object).get("fields")
+            fields = [field for field in fields_all if field["name"] in output_columns]
+            schema = OrderedDict(
+                {f["name"]: ColumnDefinition(data_types=BaseType(dtype=self.convert_to_kbc_basetype(f["type"])),
+                                             nullable=f["nillable"],
+                                             description=f["label"],
+                                             primary_key=f["name"] in pkey,
+                                             ) for f in fields}
+            )
 
-        if description:
-            self._add_columns_to_table_metadata(tm, description, output_columns)
-        return tm
+        else:
+            schema = OrderedDict(
+                {f["name"]: ColumnDefinition(data_types=BaseType(dtype=SupportedDataTypes.STRING),
+                                             primary_key=f["name"] in pkey,
+                                             ) for f in output_columns}
+            )
+
+        return schema
 
     @staticmethod
-    def convert_to_kbc_basetype(source_type: str) -> str:
+    def convert_to_kbc_basetype(source_type: str) -> SupportedDataTypes:
         source_to_snowflake = {
-            'id': 'STRING',
-            'boolean': 'BOOLEAN',
-            'reference': 'STRING',
-            'string': 'STRING',
-            'picklist': 'STRING',
-            'textarea': 'STRING',
-            'double': 'FLOAT',
-            'phone': 'STRING',
-            'email': 'STRING',
-            'date': 'DATE',
-            'datetime': 'TIMESTAMP',
-            'url': 'STRING',
-            'int': 'INTEGER',
-            'currency': 'STRING',
-            'multipicklist': 'STRING'
+            'id': SupportedDataTypes.STRING,
+            'boolean': SupportedDataTypes.BOOLEAN,
+            'reference': SupportedDataTypes.STRING,
+            'string': SupportedDataTypes.STRING,
+            'picklist': SupportedDataTypes.STRING,
+            'textarea': SupportedDataTypes.STRING,
+            'double': SupportedDataTypes.FLOAT,
+            'phone': SupportedDataTypes.STRING,
+            'email': SupportedDataTypes.STRING,
+            'date': SupportedDataTypes.DATE,
+            'datetime': SupportedDataTypes.TIMESTAMP,
+            'url': SupportedDataTypes.STRING,
+            'int': SupportedDataTypes.INTEGER,
+            'currency': SupportedDataTypes.STRING,
+            'multipicklist': SupportedDataTypes.STRING,
         }
 
         if source_type in source_to_snowflake:

@@ -141,7 +141,7 @@ class Component(ComponentBase):
                 output_columns = soql_query.sf_object_fields
 
         if output_columns:
-            query_type = params.get(KEY_QUERY_TYPE) == "Object"
+            query_type = params.get(KEY_QUERY_TYPE)
 
             table.schema = self._get_schema(salesforce_client, query_type, soql_query.sf_object, output_columns, pkey)
 
@@ -272,7 +272,6 @@ class Component(ComponentBase):
 
     def _get_schema(self, salesforce_client, query_type, sf_object, output_columns, pkey):
         if query_type == "Object":
-            logging.debug("Getting schema from object description")
             fields_all = self.get_description(salesforce_client, sf_object).get("fields")
             fields = [field for field in fields_all if field["name"] in output_columns]
             schema = OrderedDict(
@@ -288,7 +287,6 @@ class Component(ComponentBase):
             )
 
         else:
-            logging.debug(f"Using default string schema for {query_type} ")
             schema = OrderedDict(
                 {
                     col: ColumnDefinition(

@@ -424,9 +424,9 @@ class Component(ComponentBase):
     @staticmethod
     def process_salesforce_domain(url):
         if url.startswith("http://"):
-            url = url[len("http://") :]
+            url = url[len("http://"):]
         if url.startswith("https://"):
-            url = url[len("https://") :]
+            url = url[len("https://"):]
         if url.endswith(".salesforce.com"):
             url = url[: -len(".salesforce.com")]
 

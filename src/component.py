@@ -272,6 +272,7 @@ class Component(ComponentBase):
 
     def _get_schema(self, salesforce_client, query_type, sf_object, output_columns, pkey):
         if query_type == "Object":
+            logging.debug("Getting schema from object description")
             fields_all = self.get_description(salesforce_client, sf_object).get("fields")
             fields = [field for field in fields_all if field["name"] in output_columns]
             schema = OrderedDict(
@@ -287,13 +288,14 @@ class Component(ComponentBase):
             )
 
         else:
+            logging.debug(f"Using default string schema for {query_type} ")
             schema = OrderedDict(
                 {
-                    f["name"]: ColumnDefinition(
+                    col: ColumnDefinition(
                         data_types=BaseType(dtype=SupportedDataTypes.STRING),
-                        primary_key=f["name"] in pkey,
+                        primary_key=col in pkey,
                     )
-                    for f in output_columns
+                    for col in output_columns
                 }
             )
 

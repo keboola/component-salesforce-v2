@@ -301,7 +301,7 @@ class Component(ComponentBase):
 
     @staticmethod
     def convert_to_kbc_basetype(source_type: str) -> SupportedDataTypes:
-        source_to_snowflake = {
+        dtypes_mapping = {
             "id": SupportedDataTypes.STRING,
             "boolean": SupportedDataTypes.BOOLEAN,
             "reference": SupportedDataTypes.STRING,
@@ -319,11 +319,11 @@ class Component(ComponentBase):
             "multipicklist": SupportedDataTypes.STRING,
         }
 
-        if source_type in source_to_snowflake:
-            return SupportedDataTypes[source_to_snowflake[source_type]].value
+        if source_type in dtypes_mapping:
+            return SupportedDataTypes[dtypes_mapping[source_type]].value
         else:
             logging.warning(f"Unknown source type: {source_type}. Casting it to STRING.")
-            return SupportedDataTypes["STRING"].value
+            return SupportedDataTypes.STRING
 
     @staticmethod
     def validate_incremental_settings(incremental: bool, pkey: list[str]) -> None:

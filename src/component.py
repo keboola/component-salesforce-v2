@@ -8,7 +8,7 @@ from enum import Enum
 from os import mkdir, path
 
 from keboola.component.base import ComponentBase, sync_action
-from keboola.component.dao import SupportedDataTypes, TableMetadata
+from keboola.component.dao import SupportedDataTypes, BaseType, ColumnDefinition
 from keboola.component.exceptions import UserException
 from keboola.component.sync_actions import MessageType, SelectElement, ValidationResult
 from keboola.utils.header_normalizer import NormalizerStrategy, get_normalizer
@@ -90,7 +90,7 @@ class Component(ComponentBase):
         self.validate_configuration_parameters(REQUIRED_PARAMETERS)
         self.validate_image_parameters(REQUIRED_IMAGE_PARS)
 
-        start_run_time = str(datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S.000Z'))
+        start_run_time = str(datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z"))
 
         params = self.configuration.parameters
         loading_options = params.get(KEY_LOADING_OPTIONS, {})
@@ -102,7 +102,7 @@ class Component(ComponentBase):
 
         last_run = state_file.get("last_run")
         if not last_run:
-            last_run = str(datetime(2000, 1, 1).strftime('%Y-%m-%dT%H:%M:%S.000Z'))
+            last_run = str(datetime(2000, 1, 1).strftime("%Y-%m-%dT%H:%M:%S.000Z"))
 
         prev_output_columns = state_file.get("prev_output_columns")
 
@@ -117,20 +117,18 @@ class Component(ComponentBase):
         logging.info(f"Primary key : {pkey} set")
 
         table_name = loading_options.get(KEY_OUTPUT_TABLE_NAME, False) or soql_query.sf_object
-        table = self.create_out_table_definition(table_name,
-                                                 primary_key=pkey,
-                                                 incremental=incremental,
-                                                 is_sliced=True,
-                                                 destination=f'{bucket_name}.{table_name}')
+        table = self.create_out_table_definition(
+            table_name, incremental=incremental, is_sliced=True, destination=f"{bucket_name}.{table_name}"
+        )
         self.create_sliced_directory(table.full_path)
 
         self._test_query(salesforce_client, soql_query, True)
 
         results = salesforce_client.download(soql_query, table.full_path)
-        logging.info(f'Downloaded {len(results)} files')
-        total_records = sum(result.get('number_of_records', 0) for result in results)
+        logging.info(f"Downloaded {len(results)} files")
+        total_records = sum(result.get("number_of_records", 0) for result in results)
         logging.debug([result for result in results])
-        logging.info(f'Downloaded {total_records} records in total')
+        logging.info(f"Downloaded {total_records} records in total")
 
         # remove headers and get columns
         output_columns = self._fix_header_from_csv(results)
@@ -142,17 +140,13 @@ class Component(ComponentBase):
             elif params.get(KEY_QUERY_TYPE) == "Object":
                 output_columns = soql_query.sf_object_fields
 
-        table.schema = output_columns
-
         if output_columns:
+            query_type = params.get(KEY_QUERY_TYPE)
 
-            if params.get(KEY_QUERY_TYPE) == "Object":
-                tm = self._store_metadata(salesforce_client, soql_query.sf_object, table, output_columns)
-                table.table_metadata = tm
+            table.schema = self._get_schema(salesforce_client, query_type, soql_query.sf_object, output_columns, pkey)
 
             self.write_manifest(table)
-            self.write_state_file({"last_run": start_run_time,
-                                   "prev_output_columns": output_columns})
+            self.write_state_file({"last_run": start_run_time, "prev_output_columns": output_columns})
         else:
             shutil.rmtree(table.full_path)
 
@@ -160,18 +154,22 @@ class Component(ComponentBase):
     def _fix_header_from_csv(results: list[dict]) -> list[str]:
         expected_header = None
         for result in results:
-            result_file_path = result.get('file')
+            result_file_path = result.get("file")
             temp_file_path = f"{result_file_path}.tmp"
-            with open(result_file_path, 'r', encoding='utf-8') as infile, open(temp_file_path, 'w', newline='',
-                                                                               encoding='utf-8') as outfile:
+            with (
+                open(result_file_path, "r", encoding="utf-8") as infile,
+                open(temp_file_path, "w", newline="", encoding="utf-8") as outfile,
+            ):
                 reader = csv.reader(infile)
                 writer = csv.writer(outfile)
                 # check if header is same as in other files
                 actual_header = next(reader)  # Also skip the header
                 if expected_header:
                     if actual_header != expected_header:
-                        raise UserException(f"Header in file {result_file_path} is different from expected. "
-                                            f"Expected: {expected_header}, Actual: {actual_header}")
+                        raise UserException(
+                            f"Header in file {result_file_path} is different from expected. "
+                            f"Expected: {expected_header}, Actual: {actual_header}"
+                        )
                 else:
                     expected_header = actual_header
                 for row in reader:
@@ -196,7 +194,8 @@ class Component(ComponentBase):
         proxy_username = proxy_config.get(KEY_PROXY_USERNAME)
         proxy_password = proxy_config.get(KEY_PROXY_PASSWORD)
         use_http_proxy_as_https = proxy_config.get(
-            KEY_USE_HTTP_PROXY_AS_HTTPS) or self.configuration.image_parameters.get(KEY_USE_HTTP_PROXY_AS_HTTPS)
+            KEY_USE_HTTP_PROXY_AS_HTTPS
+        ) or self.configuration.image_parameters.get(KEY_USE_HTTP_PROXY_AS_HTTPS)
 
         if not proxy_server:
             raise UserException("You have selected use_proxy parameter, but you have not specified proxy server.")
@@ -241,11 +240,13 @@ class Component(ComponentBase):
                 default = item["defaultValue"]
                 label = item["label"]
 
-                tm.add_column_data_type(column=column_name,
-                                        data_type=self.convert_to_kbc_basetype(column_type),
-                                        source_data_type=column_type,
-                                        nullable=nullable,
-                                        default=default)
+                tm.add_column_data_type(
+                    column=column_name,
+                    data_type=self.convert_to_kbc_basetype(column_type),
+                    source_data_type=column_type,
+                    nullable=nullable,
+                    default=default,
+                )
 
                 # The following is disabled since it caused exceeded metadata size
                 # tm.add_column_metadata(column_name, "source_metadata", json.dumps(item))
@@ -269,53 +270,77 @@ class Component(ComponentBase):
             value = ordereddict_to_dict(value)
             recursive_flatten(key, value)
 
-    def _store_metadata(self, salesforce_client, sf_object, table, output_columns):
-        description = self.get_description(salesforce_client, sf_object)
-        tm = TableMetadata(table.get_manifest_dictionary())
+    def _get_schema(self, salesforce_client, query_type, sf_object, output_columns, pkey):
+        if query_type == "Object":
+            fields_all = self.get_description(salesforce_client, sf_object).get("fields")
+            fields = [field for field in fields_all if field["name"] in output_columns]
+            schema = OrderedDict(
+                {
+                    f["name"]: ColumnDefinition(
+                        data_types=BaseType(dtype=self.convert_to_kbc_basetype(f["type"])),
+                        nullable=f["nillable"],
+                        description=f["label"],
+                        primary_key=f["name"] in pkey,
+                    )
+                    for f in fields
+                }
+            )
 
-        if description:
-            self._add_columns_to_table_metadata(tm, description, output_columns)
-        return tm
+        else:
+            schema = OrderedDict(
+                {
+                    col: ColumnDefinition(
+                        data_types=BaseType(dtype=SupportedDataTypes.STRING),
+                        primary_key=col in pkey,
+                    )
+                    for col in output_columns
+                }
+            )
+
+        return schema
 
     @staticmethod
-    def convert_to_kbc_basetype(source_type: str) -> str:
-        source_to_snowflake = {
-            'id': 'STRING',
-            'boolean': 'BOOLEAN',
-            'reference': 'STRING',
-            'string': 'STRING',
-            'picklist': 'STRING',
-            'textarea': 'STRING',
-            'double': 'FLOAT',
-            'phone': 'STRING',
-            'email': 'STRING',
-            'date': 'DATE',
-            'datetime': 'TIMESTAMP',
-            'url': 'STRING',
-            'int': 'INTEGER',
-            'currency': 'STRING',
-            'multipicklist': 'STRING'
+    def convert_to_kbc_basetype(source_type: str) -> SupportedDataTypes:
+        dtypes_mapping = {
+            "id": SupportedDataTypes.STRING,
+            "boolean": SupportedDataTypes.BOOLEAN,
+            "reference": SupportedDataTypes.STRING,
+            "string": SupportedDataTypes.STRING,
+            "picklist": SupportedDataTypes.STRING,
+            "textarea": SupportedDataTypes.STRING,
+            "double": SupportedDataTypes.FLOAT,
+            "phone": SupportedDataTypes.STRING,
+            "email": SupportedDataTypes.STRING,
+            "date": SupportedDataTypes.DATE,
+            "datetime": SupportedDataTypes.TIMESTAMP,
+            "url": SupportedDataTypes.STRING,
+            "int": SupportedDataTypes.INTEGER,
+            "currency": SupportedDataTypes.STRING,
+            "multipicklist": SupportedDataTypes.STRING,
         }
 
-        if source_type in source_to_snowflake:
-            return SupportedDataTypes[source_to_snowflake[source_type]].value
+        if source_type in dtypes_mapping:
+            return SupportedDataTypes[dtypes_mapping[source_type]].value
         else:
             logging.warning(f"Unknown source type: {source_type}. Casting it to STRING.")
-            return SupportedDataTypes["STRING"].value
+            return SupportedDataTypes.STRING
 
     @staticmethod
     def validate_incremental_settings(incremental: bool, pkey: list[str]) -> None:
         if incremental and not pkey:
-            raise UserException("Incremental load is set but no private key. Specify a private key in the "
-                                "configuration parameters")
+            raise UserException(
+                "Incremental load is set but no private key. Specify a private key in the configuration parameters"
+            )
 
     @staticmethod
     def validate_soql_query(soql_query: SoqlQuery, pkey: list[str]) -> None:
         logging.info("Validating SOQL query")
         missing_keys = soql_query.check_pkey_in_query(pkey)
         if missing_keys:
-            raise UserException(f"Private Keys {missing_keys} not in query, Add to SOQL query or check that it exists"
-                                f" in the Salesforce object.")
+            raise UserException(
+                f"Private Keys {missing_keys} not in query, Add to SOQL query or check that it exists"
+                f" in the Salesforce object."
+            )
 
     def get_salesforce_client(self, params: dict) -> SalesforceClient:
         self.set_proxy()
@@ -331,49 +356,61 @@ class Component(ComponentBase):
 
         if login_method == LoginType.SECURITY_TOKEN_LOGIN:
             if not params.get(KEY_SECURITY_TOKEN):
-                raise UserException("Missing Required Parameter: Security Token. "
-                                    "It is required when using Security Token Login")
+                raise UserException(
+                    "Missing Required Parameter: Security Token. It is required when using Security Token Login"
+                )
 
             if not params.get(KEY_USERNAME) or not params.get(KEY_PASSWORD):
-                raise UserException("Missing Required Parameter: Both username and password are required for "
-                                    "Security Token Login.")
+                raise UserException(
+                    "Missing Required Parameter: Both username and password are required for Security Token Login."
+                )
 
-            return SalesforceClient.from_security_token(username=params.get(KEY_USERNAME),
-                                                        password=params.get(KEY_PASSWORD),
-                                                        security_token=params.get(KEY_SECURITY_TOKEN),
-                                                        sandbox=params.get(KEY_SANDBOX),
-                                                        api_version=params.get(KEY_API_VERSION, DEFAULT_API_VERSION))
+            return SalesforceClient.from_security_token(
+                username=params.get(KEY_USERNAME),
+                password=params.get(KEY_PASSWORD),
+                security_token=params.get(KEY_SECURITY_TOKEN),
+                sandbox=params.get(KEY_SANDBOX),
+                api_version=params.get(KEY_API_VERSION, DEFAULT_API_VERSION),
+            )
 
         elif login_method == LoginType.CONNECTED_APP_LOGIN:
             if not params.get(KEY_CONSUMER_KEY) or not params.get(KEY_CONSUMER_SECRET):
-                raise UserException("Missing Required Parameter: At least one of Consumer Key and Consumer Secret "
-                                    "are missing. They are both required when using Connected App Login")
+                raise UserException(
+                    "Missing Required Parameter: At least one of Consumer Key and Consumer Secret "
+                    "are missing. They are both required when using Connected App Login"
+                )
 
             if not params.get(KEY_USERNAME) or not params.get(KEY_PASSWORD):
-                raise UserException("Missing Required Parameter: Both username and password are required for "
-                                    "Connected App Login.")
+                raise UserException(
+                    "Missing Required Parameter: Both username and password are required for Connected App Login."
+                )
 
-            return SalesforceClient.from_connected_app(username=params.get(KEY_USERNAME),
-                                                       password=params.get(KEY_PASSWORD),
-                                                       consumer_key=params.get(KEY_CONSUMER_KEY),
-                                                       consumer_secret=params.get(KEY_CONSUMER_SECRET),
-                                                       sandbox=params.get(KEY_SANDBOX),
-                                                       api_version=params.get(KEY_API_VERSION, DEFAULT_API_VERSION))
+            return SalesforceClient.from_connected_app(
+                username=params.get(KEY_USERNAME),
+                password=params.get(KEY_PASSWORD),
+                consumer_key=params.get(KEY_CONSUMER_KEY),
+                consumer_secret=params.get(KEY_CONSUMER_SECRET),
+                sandbox=params.get(KEY_SANDBOX),
+                api_version=params.get(KEY_API_VERSION, DEFAULT_API_VERSION),
+            )
 
         elif login_method == LoginType.CONNECTED_APP_OAUTH_CC:
             if not params.get(KEY_CONSUMER_KEY) or not params.get(KEY_CONSUMER_SECRET):
-                raise UserException("Missing Required Parameter: At least one of Consumer Key and Consumer Secret "
-                                    "are missing. They are both required when using Connected App Login")
+                raise UserException(
+                    "Missing Required Parameter: At least one of Consumer Key and Consumer Secret "
+                    "are missing. They are both required when using Connected App Login"
+                )
 
             if not (domain := params.get(KEY_DOMAIN)):
                 raise UserException("Parameter 'domain' is needed for Client Credentials Flow. ")
             domain = self.process_salesforce_domain(domain)
 
-            return SalesforceClient.from_connected_app_oauth_cc(consumer_key=params[KEY_CONSUMER_KEY],
-                                                                consumer_secret=params[KEY_CONSUMER_SECRET],
-                                                                api_version=params.get(
-                                                                    KEY_API_VERSION, DEFAULT_API_VERSION),
-                                                                domain=domain)
+            return SalesforceClient.from_connected_app_oauth_cc(
+                consumer_key=params[KEY_CONSUMER_KEY],
+                consumer_secret=params[KEY_CONSUMER_SECRET],
+                api_version=params.get(KEY_API_VERSION, DEFAULT_API_VERSION),
+                domain=domain,
+            )
 
     def _get_login_method(self) -> LoginType:
         login_type_name = self.configuration.parameters.get(KEY_LOGIN_METHOD, DEFAULT_LOGIN_METHOD)
@@ -381,7 +418,8 @@ class Component(ComponentBase):
             return LoginType(login_type_name)
         except ValueError as val_err:
             raise UserException(
-                f"'{login_type_name}' is not a valid Login Type. Enter one of : {LoginType.list()}") from val_err
+                f"'{login_type_name}' is not a valid Login Type. Enter one of : {LoginType.list()}"
+            ) from val_err
 
     @staticmethod
     def process_salesforce_domain(url):
@@ -390,7 +428,7 @@ class Component(ComponentBase):
         if url.startswith("https://"):
             url = url[len("https://"):]
         if url.endswith(".salesforce.com"):
-            url = url[:-len(".salesforce.com")]
+            url = url[: -len(".salesforce.com")]
 
         logging.debug(f"The component will use {url} for Client Credentials Flow type authentication.")
 
@@ -427,8 +465,9 @@ class Component(ComponentBase):
             except SalesforceResourceNotFound as salesforce_error:
                 raise UserException(f"Custom SOQL could not be built : {salesforce_error}") from salesforce_error
             except SalesforceClientException as salesforce_error:
-                raise UserException(f"Cannot get Salesforce object description, error: {salesforce_error}") \
-                    from salesforce_error
+                raise UserException(
+                    f"Cannot get Salesforce object description, error: {salesforce_error}"
+                ) from salesforce_error
 
         elif query_type == "Object":
             try:
@@ -436,29 +475,33 @@ class Component(ComponentBase):
                 logging.info(f"Downloading salesforce object: {salesforce_object}.")
 
             except SalesforceResourceNotFound as salesforce_error:
-                raise UserException(f"Object type {salesforce_object} does not exist in Salesforce, "
-                                    f"enter a valid object") from salesforce_error
+                raise UserException(
+                    f"Object type {salesforce_object} does not exist in Salesforce, enter a valid object"
+                ) from salesforce_error
             except SalesforceClientException as salesforce_error:
                 error_message = str(salesforce_error)
-                if 'INVALID_OPERATION_WITH_EXPIRED_PASSWORD' in error_message:
-                    custom_message = "Your password has expired. Please reset your password or contact your " \
-                                     "Salesforce Admin to reset the password and use the new one. You can also set " \
-                                     "your Salesforce user for a password that never expires in the Password " \
-                                     "Policies: https://help.salesforce.com/s/articleView?id=sf.admin_password.htm" \
-                                     "&type=5. Please note that when the password is changed, " \
-                                     "a new security token is generated."
+                if "INVALID_OPERATION_WITH_EXPIRED_PASSWORD" in error_message:
+                    custom_message = (
+                        "Your password has expired. Please reset your password or contact your "
+                        "Salesforce Admin to reset the password and use the new one. You can also set "
+                        "your Salesforce user for a password that never expires in the Password "
+                        "Policies: https://help.salesforce.com/s/articleView?id=sf.admin_password.htm"
+                        "&type=5. Please note that when the password is changed, "
+                        "a new security token is generated."
+                    )
                 else:
                     custom_message = error_message
                 raise UserException(custom_message) from salesforce_error
 
         else:
-            raise UserException(f'Either {KEY_SOQL_QUERY} or {KEY_OBJECT} parameters must be specified.')
+            raise UserException(f"Either {KEY_SOQL_QUERY} or {KEY_OBJECT} parameters must be specified.")
 
         if incremental and incremental_fetch and incremental_field and last_run:
             soql_query.set_query_to_incremental(incremental_field, last_run)
         elif incremental and incremental_fetch and not incremental_field:
-            raise UserException("Incremental field is not specified, if you want to use incremental fetching, it must "
-                                "specified.")
+            raise UserException(
+                "Incremental field is not specified, if you want to use incremental fetching, it must specified."
+            )
 
         soql_query.set_deleted_option_in_query(is_deleted)
 
@@ -476,7 +519,7 @@ class Component(ComponentBase):
         bucket_name = f"kds-team-ex-salesforce-v2-{config_id}"
         return bucket_name
 
-    @sync_action('testConnection')
+    @sync_action("testConnection")
     def test_connection(self):
         """
         Tries to log into Salesforce, raises user exception if login params ar incorrect
@@ -501,7 +544,7 @@ class Component(ComponentBase):
     def parse_result(data: OrderedDict) -> dict:
         return dict((k, v) for k, v in data.items() if k != "attributes")
 
-    @sync_action('testQuery')
+    @sync_action("testQuery")
     def test_query(self):
         params = self.configuration.parameters
         salesforce_client = self.get_salesforce_client(params)
@@ -520,7 +563,7 @@ class Component(ComponentBase):
         except UserException as e:
             return ValidationResult(f"Query Failed: {e}", MessageType.WARNING)
 
-    @sync_action('loadObjects')
+    @sync_action("loadObjects")
     def load_possible_objects(self) -> list[SelectElement]:
         """
         Finds all possible objects in Salesforce that can be fetched by the Bulk API
@@ -540,7 +583,7 @@ class Component(ComponentBase):
         object_name = params.get("object")
         salesforce_client = self.get_salesforce_client(params)
         descriptions = salesforce_client.describe_object_w_metadata(object_name)
-        return [SelectElement(label=f'{field[0]} ({field[1]})', value=field[0]) for field in descriptions]
+        return [SelectElement(label=f"{field[0]} ({field[1]})", value=field[0]) for field in descriptions]
 
     @sync_action("loadPossibleIncrementalField")
     def load_possible_incremental_field(self) -> list[SelectElement]:
@@ -619,8 +662,10 @@ class Component(ComponentBase):
         result = self._get_first_result_from_custom_soql()
 
         if not result:
-            raise UserException("Failed to determine fields from SOQL query, "
-                                "make sure the SOQL query is valid and that it returns data.")
+            raise UserException(
+                "Failed to determine fields from SOQL query, "
+                "make sure the SOQL query is valid and that it returns data."
+            )
 
         columns = list(result.keys())
         if "attributes" in columns:

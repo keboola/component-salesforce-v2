@@ -136,7 +136,6 @@ class Component(ComponentBase):
 
         logging.info(f"Output columns: {output_columns}")
 
-
         if not output_columns:
             if prev_output_columns:
                 logging.info("Using previous output columns")

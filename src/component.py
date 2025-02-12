@@ -134,10 +134,15 @@ class Component(ComponentBase):
         output_columns = self._fix_header_from_csv(results)
         output_columns = self.normalize_column_names(output_columns)
 
+        logging.info(f"Output columns: {output_columns}")
+
+
         if not output_columns:
             if prev_output_columns:
+                logging.info("Using previous output columns")
                 output_columns = prev_output_columns
             elif params.get(KEY_QUERY_TYPE) == "Object":
+                logging.info("Using object description columns")
                 output_columns = soql_query.sf_object_fields
 
         if output_columns:

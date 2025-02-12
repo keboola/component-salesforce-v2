@@ -88,11 +88,11 @@ If "connected_app" login method:
  - Get deleted records (is_deleted) - [OPT] Fetch records that have been deleted
  - API version (api_version) - [OPT] Specify the version of API you want to extract data from
 
-### Fetching whole Objects
+### Fetching whole Objects (with Native Data Types support)
 
 - **Object** - Salesforce object identifier, eg. Account.
 
-### Fetching using SOQL queries
+### Fetching using SOQL queries (all columns are typed as string)
 
 - **SOQL query** - Salesforce SOQL query, eg. SELECT Id, FirstName, LastName FROM Contact
 

@@ -131,8 +131,10 @@ class Component(ComponentBase):
         logging.info(f"Downloaded {total_records} records in total")
 
         # remove headers and get columns
-        output_columns = self._fix_header_from_csv(results)
-        output_columns = self.normalize_column_names(output_columns)
+        output_columns_raw = self._fix_header_from_csv(results)
+        output_columns = self.normalize_column_names(output_columns_raw)
+
+        logging.info(f"Output columns_raw: {output_columns}")
 
         logging.info(f"Output columns: {output_columns}")
 
@@ -278,6 +280,11 @@ class Component(ComponentBase):
         if query_type == "Object":
             fields_all = self.get_description(salesforce_client, sf_object).get("fields")
             fields = [field for field in fields_all if field["name"] in output_columns]
+
+            logging.info("Fields_all: " + str(fields_all))
+
+            logging.info("Fields: " + str(fields))
+
             schema = OrderedDict(
                 {
                     f["name"]: ColumnDefinition(

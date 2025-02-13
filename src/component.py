@@ -274,22 +274,25 @@ class Component(ComponentBase):
         if query_type == "Object":
             fields_all = self.get_description(salesforce_client, sf_object).get("fields")
             fields = [field for field in fields_all if field["name"] in output_columns]
-            schema = OrderedDict()
-            for col in output_columns:
-                if col in fields:
-                    field = fields[col]
-                    schema[col] = ColumnDefinition(
-                        data_types=BaseType(dtype=self.convert_to_kbc_basetype(field.get("type"))),
-                        nullable=field.get("nillable"),
-                        description=field.get("label"),
-                        primary_key=col in pkey,
-                    )
-                else:
-                    schema[col] = ColumnDefinition(
-                        data_types=BaseType(dtype=SupportedDataTypes.STRING), primary_key=col in pkey
-                    )
+        else:
+            fields = []
 
-            return schema
+        schema = OrderedDict()
+        for col in output_columns:
+            if col in fields:
+                field = fields[col]
+                schema[col] = ColumnDefinition(
+                    data_types=BaseType(dtype=self.convert_to_kbc_basetype(field.get("type"))),
+                    nullable=field.get("nillable"),
+                    description=field.get("label"),
+                    primary_key=col in pkey,
+                )
+            else:
+                schema[col] = ColumnDefinition(
+                    data_types=BaseType(dtype=SupportedDataTypes.STRING), primary_key=col in pkey
+                )
+
+        return schema
 
     @staticmethod
     def convert_to_kbc_basetype(source_type: str) -> SupportedDataTypes:

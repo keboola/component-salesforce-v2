@@ -134,7 +134,7 @@ class Component(ComponentBase):
         output_columns_raw = self._fix_header_from_csv(results)
         output_columns = self.normalize_column_names(output_columns_raw)
 
-        logging.info(f"Output columns_raw: {output_columns}")
+        logging.info(f"Output columns_raw: {output_columns_raw}")
 
         logging.info(f"Output columns: {output_columns}")
 

@@ -273,7 +273,7 @@ class Component(ComponentBase):
     def _get_schema(self, salesforce_client, query_type, sf_object, output_columns, pkey):
         if query_type == "Object":
             fields_all = self.get_description(salesforce_client, sf_object).get("fields")
-            fields = [field for field in fields_all if field["name"] in output_columns]
+            fields = {field["name"]: field for field in fields_all if field["name"] in output_columns}
         else:
             fields = []
 

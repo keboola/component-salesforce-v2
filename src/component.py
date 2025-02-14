@@ -273,29 +273,24 @@ class Component(ComponentBase):
     def _get_schema(self, salesforce_client, query_type, sf_object, output_columns, pkey):
         if query_type == "Object":
             fields_all = self.get_description(salesforce_client, sf_object).get("fields")
-            fields = [field for field in fields_all if field["name"] in output_columns]
-            schema = OrderedDict(
-                {
-                    f["name"]: ColumnDefinition(
-                        data_types=BaseType(dtype=self.convert_to_kbc_basetype(f["type"])),
-                        nullable=f["nillable"],
-                        description=f["label"],
-                        primary_key=f["name"] in pkey,
-                    )
-                    for f in fields
-                }
-            )
-
+            fields = {field["name"]: field for field in fields_all if field["name"] in output_columns}
         else:
-            schema = OrderedDict(
-                {
-                    col: ColumnDefinition(
-                        data_types=BaseType(dtype=SupportedDataTypes.STRING),
-                        primary_key=col in pkey,
-                    )
-                    for col in output_columns
-                }
-            )
+            fields = []
+
+        schema = OrderedDict()
+        for col in output_columns:
+            if col in fields:
+                field = fields[col]
+                schema[col] = ColumnDefinition(
+                    data_types=BaseType(dtype=self.convert_to_kbc_basetype(field.get("type"))),
+                    nullable=field.get("nillable"),
+                    description=field.get("label"),
+                    primary_key=col in pkey,
+                )
+            else:
+                schema[col] = ColumnDefinition(
+                    data_types=BaseType(dtype=SupportedDataTypes.STRING), primary_key=col in pkey
+                )
 
         return schema
 

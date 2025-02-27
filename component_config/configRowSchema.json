@@ -16,7 +16,7 @@
       "propertyOrder": 1
     },
     "object": {
-      "title": "Object Name",
+      "title": "Object name",
       "type": "string",
       "options": {
         "dependencies": {

@@ -10,7 +10,7 @@
   ],
   "properties": {
     "login_method": {
-      "title": "Login Method",
+      "title": "Login method",
       "type": "string",
       "enum": [
         "security_token",
@@ -19,18 +19,18 @@
       ],
       "options": {
         "enum_titles": [
-          "Security Token with Username and Password",
-          "Connected App with Username and Password",
-          "Connected App OAuth Client 2.0 Client Credentials"
+          "Security token with username and password",
+          "Connected app with username and password",
+          "Connected app OAuth Client 2.0 Client Credentials"
         ]
       },
       "default": "security_token",
-      "description": "Specify the login method you wish to use",
+      "description": "Select the login method you wish to use.",
       "propertyOrder": 1
     },
     "username": {
       "type": "string",
-      "title": "Login Name",
+      "title": "Login name",
       "default": "",
       "options": {
         "dependencies": {
@@ -41,7 +41,7 @@
         }
       },
       "minLength": 1,
-      "description": "Login name for Salesforce",
+      "description": "Salesforce login name.",
       "propertyOrder": 10
     },
     "#password": {
@@ -58,7 +58,7 @@
         }
       },
       "minLength": 1,
-      "description": "Salesforce password",
+      "description": "Salesforce password.",
       "propertyOrder": 20
     },
     "#security_token": {
@@ -71,7 +71,7 @@
           "login_method": "security_token"
         }
       },
-      "description": "Salesforce security token",
+      "description": "Security token for Salesforce authentication.",
       "propertyOrder": 30
     },
     "domain": {
@@ -83,7 +83,7 @@
           "login_method": "connected_app_oauth_cc"
         }
       },
-      "description": "Your Salesforce Domain. For example: https://keboola-dev-ed.my.salesforce.com",
+      "description": "Salesforce domain URL, e.g., https://keboola-dev-ed.my.salesforce.com.",
       "propertyOrder": 30
     },
     "#consumer_key": {
@@ -98,7 +98,7 @@
           ]
         }
       },
-      "description": "Salesforce Connected App Consumer Key",
+      "description": "Salesforce connected app consumer key.",
       "propertyOrder": 33
     },
     "#consumer_secret": {
@@ -113,7 +113,7 @@
           ]
         }
       },
-      "description": "Salesforce Connected App Consumer Secret",
+      "description": "Salesforce connected app consumer secret.",
       "propertyOrder": 36
     },
     "sandbox": {
@@ -128,7 +128,7 @@
           ]
         }
       },
-      "description": "Download records from sandbox instead of the production environment.",
+      "description": "Fetch records from the Salesforce sandbox environment instead of production.",
       "propertyOrder": 40
     },
     "api_version": {
@@ -148,18 +148,18 @@
         "62.0"
       ],
       "default": "62.0",
-      "description": "Specify the version of API you want to extract data from",
+      "description": "Select the Salesforce API version you want to use for data extraction.",
       "propertyOrder": 50
     },
     "proxy": {
       "type": "object",
       "title": "Proxy Settings",
       "format": "grid-strict",
-      "description": "Proxy address will be constructed in (username:password@)your.proxy.server.com(:port) format.",
+      "description": "The proxy address follows this format: (username:password@)your.proxy.server.com(:port).",
       "propertyOrder": 60,
       "properties": {
         "use_proxy": {
-          "title": "Use Proxy",
+          "title": "Enable proxy",
           "type": "boolean",
           "format": "checkbox",
           "default": false,
@@ -171,7 +171,7 @@
         },
         "proxy_server": {
           "type": "string",
-          "title": "HTTPS Proxy Server Address",
+          "title": "HTTPS proxy server address",
           "options": {
             "grid_columns": 8,
             "dependencies": {
@@ -182,7 +182,7 @@
         },
         "proxy_port": {
           "type": "string",
-          "title": "HTTPS Proxy Server Port",
+          "title": "HTTPS proxy server port",
           "options": {
             "grid_columns": 4,
             "dependencies": {
@@ -192,7 +192,7 @@
           "propertyOrder": 3
         },
         "basic_auth": {
-          "title": "Basic Authentication",
+          "title": "Basic authentication",
           "type": "boolean",
           "format": "checkbox",
           "default": false,
@@ -207,7 +207,7 @@
         },
         "username": {
           "type": "string",
-          "title": "HTTPS Proxy Server Username",
+          "title": "HTTPS proxy server username",
           "options": {
             "dependencies": {
               "use_proxy": true,
@@ -218,7 +218,7 @@
         },
         "#password": {
           "type": "string",
-          "title": "HTTPS Proxy Server Password",
+          "title": "HTTPS proxy server password",
           "format": "password",
           "options": {
             "dependencies": {

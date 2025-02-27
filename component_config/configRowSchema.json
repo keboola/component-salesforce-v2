@@ -16,14 +16,14 @@
       "propertyOrder": 1
     },
     "object": {
-      "title": "Object Name",
+      "title": "Object name",
       "type": "string",
       "options": {
         "dependencies": {
           "query_type_selector": "Object"
         },
         "async": {
-          "label": "Re-load Objects",
+          "label": "Reload objects",
           "action": "loadObjects"
         }
       },
@@ -35,7 +35,7 @@
       "enum": [
       ],
       "format": "select",
-      "description": "Salesforce object identifier, eg. Contact",
+      "description": "Salesforce object identifier, e.g., Contact",
       "propertyOrder": 2
     },
     "fields": {
@@ -51,19 +51,19 @@
           "query_type_selector": "Object"
         },
         "async": {
-          "label": "Load Fields",
+          "label": "Load fields",
           "action": "loadFields"
         }
       },
       "enum": [
       ],
       "format": "select",
-      "description": "Salesforce fields to fetch. If left empty, all fields will be downloaded.",
+      "description": "Salesforce fields to fetch. If left empty, all available fields will be retrieved.",
       "uniqueItems": true,
       "propertyOrder": 3
     },
     "soql_query": {
-      "title": "SOQL Query",
+      "title": "SOQL query",
       "type": "string",
       "format": "textarea",
       "options": {
@@ -71,7 +71,7 @@
           "query_type_selector": "Custom SOQL"
         }
       },
-      "description": "Specify the SOQL query, eg. SELECT Id, FirstName, LastName FROM Contact. You can easily develop your SOQL code in the <a href='https://workbench.developerforce.com/login.php?startUrl=%2Fquery.php'>Developer Workbench</a>",
+      "description": "Specify the SOQL query, e.g., SELECT Id, FirstName, LastName FROM Contact. You can easily develop your SOQL code in the <a href='https://workbench.developerforce.com/login.php?startUrl=%2Fquery.php'>Developer Workbench</a>",
       "propertyOrder": 4
     },
     "validation_button": {
@@ -80,7 +80,7 @@
       "propertyOrder": 5,
       "options": {
         "async": {
-          "label": "Test Query",
+          "label": "Test query",
           "action": "testQuery"
         },
         "dependencies": {
@@ -93,7 +93,7 @@
       "type": "boolean",
       "format": "checkbox",
       "default": false,
-      "description": "Fetch records that have been deleted",
+      "description": "Retrieve records that have been deleted.",
       "propertyOrder": 6
     },
     "loading_options": {
@@ -106,8 +106,8 @@
       "properties": {
         "incremental_field": {
           "type": "string",
-          "title": "Incremental Field",
-          "description": "Salesforce object field to use for incremental fetching, eg. LastModifiedDate for most Salesforce objects or CreatedDate for Salesforce History objects",
+          "title": "Incremental field",
+          "description": "Salesforce object field used for incremental fetching, e.g., LastModifiedDate for most Salesforce objects or CreatedDate for Salesforce History objects.",
           "propertyOrder": 300,
           "options": {
             "dependencies": {
@@ -115,7 +115,7 @@
               "incremental_fetch": true
             },
             "async": {
-              "label": "Re-load Fields",
+              "label": "Reload fields",
               "action": "loadPossibleIncrementalField"
             }
           },
@@ -137,7 +137,7 @@
           "title": "Primary key",
           "options": {
             "async": {
-              "label": "Re-load Fields",
+              "label": "Reload fields",
               "action": "loadPossiblePrimaryKeys"
             }
           },
@@ -149,7 +149,7 @@
           "type": "boolean",
           "format": "checkbox",
           "default": false,
-          "description": "Fetch records that have been updated since the last run of the component with a specified field",
+          "description": "Retrieve records that have been updated since the component's last run, based on a specified field.",
           "propertyOrder": 250,
           "options": {
             "dependencies": {
@@ -165,19 +165,19 @@
           ],
           "options": {
             "enum_titles": [
-              "Full Load",
+              "Full load",
               "Incremental Update"
             ]
           },
           "default": 0,
           "title": "Load type",
-          "description": "If set to Incremental update, the result tables will be updated based on primary key and new records will be fetched. Full load overwrites the destination table each time.",
+          "description": "If set to Incremental update, the result tables will be updated based on the primary key and new records will be fetched. Full load overwrites the destination table each time.",
           "propertyOrder": 200
         },
         "output_table_name": {
             "type": "string",
-            "title": "Storage Table Name",
-            "description": "Override the default name of the table in Storage",
+            "title": "Storage table name",
+            "description": "Override the default table name in Storage.",
             "propertyOrder": 20
           }
       }

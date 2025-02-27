@@ -1,1 +1,1 @@
-This component allows you to download data with a SOQL query or directly download a whole object.
+This component allows you to download data using an SOQL query or to download an entire object directly.

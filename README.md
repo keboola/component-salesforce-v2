@@ -1,113 +1,109 @@
 # Salesforce Extractor
 
-The component exports data from Salesforce based on a SOQL query or an object you provide 
-and saves it into the out/tables directory.
+The component exports data from Salesforce using an SOQL query or a specified object you provide 
+and saves it in the `out/tables` directory.
 
 **Table of contents:**  
   
 [TOC]
 # Prerequisites 
 
-## Choose an authorization method
+## Choose an Authorization Method
 
-In order to authorize the component you can select one of the two following methods of authorization:
+To authorize the component, select one of the following authentication methods:
 * With a username, password, and **Security Token** 
 * With a username, password, and **Connected App** 
 * With a Consumer Key and a Consumer Secret using **OAuth 2.0 Client Credentials Flow**
 
-In the below sections we describe how to get a security token, and how to set up a connected app.
+The following sections explain how to obtain a security token and set up a Connected App.
 
-### How to obtain a Security Token
+### Obtaining a Security Token
 
-If you do not have your Security Token, you will have to reset your current one following the steps outlined in the
+If you do not have your Security Token, you will have to reset your current one by following the steps outlined in the
 [Salesforce Documentation](https://help.salesforce.com/s/articleView?id=sf.user_security_token.htm&type=5).
 
-### How to set up a Connected App
+### Setting Up a Connected App
 
-In the Salesforce Setup menu navigate to Platform Tools > Apps > App Manager.
+In the Salesforce Setup menu, navigate to *Platform Tools* > *Apps* > *App Manager*.
 
-On the top left you should see a button labeled *New Connected App* and click on it.
+Click the **New Connected App** button at the top left.
 
-In New Connected App fill in :
+In the *New Connected App*, fill in the following fields:
 
-* *Connected App Name* : name the app distinctively, e.g. Keboola Connection App
-* *API Name* :  will be automatically generated from the App name
-* *Contact Email* : your email
+* **Connected App Name**: Name the app distinctively, e.g., Keboola App.
+* **API Name**:  This will be automatically generated from the App Name.
+* **Contact Email**: Your email address.
 
-Next in the API(Enable OAuth Settings) check the *Enable OAuth Settings* box. More options should appear. Enable the 
-*Enable for Device Flow* box and the *Callback URL* should be automatically set. Next select the following scopes in the 
-'Selected OAuth Scopes' section :
+Next, in the API (*Enable OAuth Settings*), check the **Enable OAuth Settings** box. More options will appear. Enable the 
+**Enable for Device Flow** box, and the **Callback URL** should be automatically set. Then, in the 
+*Selected OAuth Scopes* section, select the following scopes:
 
-*  Manage user data via APIs (api)
-*  Access unique user identifiers (openid)
-*  Perform requests at any time (refresh_token, offline_access)
+*  Manage user data via APIs (`api`)
+*  Access unique user identifiers (`openid`)
+*  Perform requests at any time (`refresh_token`, `offline_access`)
 
-Once filled in, click the *save* button on the top of the form. Now your App should be created, click the shown *Continue*
-button to advance.
+Once completed, click the **Save** button at the top of the form. Your app should now be created. Click the **Continue**
+button to proceed.
 
-Next find you newly created App in the  Platform Tools > Apps > App Manager. Once you see your app, in the row that contains the
-right App Name click on the downward facing arrow on the right and click *Manage*, you should now be able to see the
-Connection App Policies. On the top you should see an *Edit Policies* button, click it.
+Next, find your newly created app in  *Platform Tools > Apps > App Manager*. Locate the app in the list, click the dropdown arrow next to its name,
+and select **Manage**. In the *Connection App Policies*, click **Edit Policies**.
 
-In the *OAuth Policies* find the *IP Relaxation* and select the  *Relax IP restrictions*.
-Leave everything else the same and click *save*
+Under *IP Relaxation*, select **Relax IP restrictions**.
+Leave everything else unchanged and click **Save**.
 
-Now finally to get the *Consumer Key* and *Consumer Secret* go back to Platform Tools > Apps > App Manager, find the 
-App and in the row that contains the right App Name click on the downward facing arrow on the right and click *View*.
-In the *API (Enable OAuth Settings)* > *Consumer Key and Secret* you should see a button *Manage Consumer Details*, click on it.
+Finally, to retrieve the **Consumer Key** and **Consumer Secret**, return to *Platform Tools > Apps > App Manager*. Locate your app,
+click the dropdown arrow next to its name, and select **View**.
+Under *API (Enable OAuth Settings)*, find **Consumer Key and Secret** and click **Manage Consumer Details**.
 
-You might be prompted to fill in a Verification Code. Fill it in.
-
-Now you should see the Consumer details. Save the Key and Secret to a password manager or other secure space.
+You may be prompted for a verification code. Enter the code to view your Consumer details. Save the Key and Secret in a password manager or another secure location.
 
 ### Enabling Client Credentials Flow
 
-To enable client credentials flow, you need to create a Connected App in Salesforce. This process is described in **How to set up a Connected App** section above.
-The only difference will be checking **Enable Client Credentials Flow** for the Connected App.
+To enable Client Credentials Flow, create a Connected App in Salesforce by following the **How to set up a Connected App** section above.
+The only difference is that you must check **Enable Client Credentials Flow** for the Connected App.
 
-You also need to fill in the **domain** field for this type of Authorization.
+Additionally, you need to provide the **domain** field for this type of authorization.
 
 # Configuration
 
 ## Authorization
 
-- **Login Method** (login_method) - Select either "security_token" or "connected_app", Default : "security_token"
-- **Username** (username) - (REQ) your username, when exporting data from sandbox don't forget to add .sandboxname at the end
-- **Password** (#password) - (REQ) your password
-- **Sandbox** (sandbox) - (REQ) true when you want to export data from sandbox
+- **Login Method** (`login_method`) - Choose between `security_token` or `connected_app`. Default: `security_token`.
+- **Username** (`username`) - (REQ) Your Salesforce username. If exporting data from a sandbox, append `.sandboxname` to the username.
+- **Password** (`#password`) - (REQ) Your Salesforce password.
+- **Sandbox** (`sandbox`) - (REQ) Set to `true` to export data from a Saleforce sandbox.
 
-If "security_token" login method is selected:
-- **Security Token** (#security_token) - (REQ) your security token, don't forget it is different for sandbox
+If the `security_token` login method is selected:
+- **Security Token** (`#security_token`) - (REQ) Your security token. Note that it is different for sandboxes.
 
-If "connected_app" login method:
-- **Consumer Key** (#consumer_key) - (REQ) The Consumer Key of your Connected App
-- **Consumer Secret** (#consumer_secret) - (REQ) The Consumer Secret of your Connected App
+If the `connected_app` login method is selected:
+- **Consumer Key** (`#consumer_key`) - (REQ) The Consumer Key of your Connected App.
+- **Consumer Secret** (`#consumer_secret`) - (REQ) The Consumer Secret of your Connected App.
 - 
-## Row configuration
- - Query type (query_type_selector) - [REQ] Either "Object" or  "Custom SOQL"
- - Get deleted records (is_deleted) - [OPT] Fetch records that have been deleted
- - API version (api_version) - [OPT] Specify the version of API you want to extract data from
+## Row Configuration
+ - **Query Type** (`query_type_selector`) - [REQ] Select `Object` or `Custom SOQL`.
+ - **Get Deleted Records** (`is_deleted`) - [OPT] Fetch records that have been deleted.
+ - **API Version** (`api_version`) - [OPT] Select the Salesforce API version to use for data extraction.
 
-### Fetching whole Objects (with Native Data Types support)
+### Fetching Full Objects (with Native Data Types Support)
 
-- **Object** - Salesforce object identifier, eg. Account.
+- **Object** - Salesforce object identifier, e.g., `Account`.
 
-### Fetching using SOQL queries (all columns are typed as string)
+### Fetching Data with SOQL Queries (All Columns Stored as Strings)
 
-- **SOQL query** - Salesforce SOQL query, eg. SELECT Id, FirstName, LastName FROM Contact
+- **SOQL query** - Salesforce SOQL query, e.g., `SELECT Id`, `FirstName`, `LastName FROM Contact`
 
-## Load type
-If set to Incremental update, the result tables will be updated based on primary key. 
-Full load overwrites the destination table each time. 
-It can override the table name with the parameter **output_table_name** and the bucket with the parameter **bucket_name**.
+## Load Type
+If `Incremental` is enabled, result tables will be updated based on the primary key. 
+A full load overwrites the destination table each time. 
+You can override the default table name using the `output_table_name` parameter and specify a Storage bucket using `bucket_name`.
 
-### Incremental fetching 
+### Incremental Fetching 
 
-Incremental fetching allows the fetching of only the records that have been modified since the previous run of
-the component. This is done by specifying an incremental field in the object that contains data on when it wast last modified.
+Incremental fetching allows the retrieval of only records that have been modified since the component's last run. 
+To enable incremental fetching, specify an incremental field that tracks when records were last modified.
 
-
-**Example: With Security Token**
+**Example: Using Security Token**
 
 ```json
 {

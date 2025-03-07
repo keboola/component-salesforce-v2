@@ -8,7 +8,7 @@ from enum import Enum
 from os import mkdir, path
 
 from keboola.component.base import ComponentBase, sync_action
-from keboola.component.dao import SupportedDataTypes, BaseType, ColumnDefinition
+from keboola.component.dao import BaseType, ColumnDefinition, SupportedDataTypes
 from keboola.component.exceptions import UserException
 from keboola.component.sync_actions import MessageType, SelectElement, ValidationResult
 from keboola.utils.header_normalizer import NormalizerStrategy, get_normalizer
@@ -86,7 +86,7 @@ class Component(ComponentBase):
     def __init__(self):
         super().__init__()
 
-    def run(self):
+    def run(self, return_data=False):
         self.validate_configuration_parameters(REQUIRED_PARAMETERS)
         self.validate_image_parameters(REQUIRED_IMAGE_PARS)
 
@@ -129,6 +129,9 @@ class Component(ComponentBase):
         total_records = sum(result.get("number_of_records", 0) for result in results)
         logging.debug([result for result in results])
         logging.info(f"Downloaded {total_records} records in total")
+
+        if return_data:
+            return results
 
         # remove headers and get columns
         output_columns = self._fix_header_from_csv(results)
@@ -419,9 +422,9 @@ class Component(ComponentBase):
     @staticmethod
     def process_salesforce_domain(url):
         if url.startswith("http://"):
-            url = url[len("http://"):]
+            url = url[len("http://") :]
         if url.startswith("https://"):
-            url = url[len("https://"):]
+            url = url[len("https://") :]
         if url.endswith(".salesforce.com"):
             url = url[: -len(".salesforce.com")]
 
@@ -618,6 +621,13 @@ class Component(ComponentBase):
             return self._get_object_fields_names_and_normalized_values(object_name)
         else:
             raise UserException(f"Invalid {KEY_QUERY_TYPE}")
+
+    # @sync_action("runComponent")
+    # def sync_run_component(self):
+    #     """
+    #     Run the component as a sync action
+    #     """
+    #     return self.run(return_data=True)
 
     def _get_object_name_from_custom_query(self) -> str:
         params = self.configuration.parameters

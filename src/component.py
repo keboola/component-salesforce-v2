@@ -1,4 +1,5 @@
 import csv
+import json
 import logging
 import os
 import shutil
@@ -8,7 +9,7 @@ from enum import Enum
 from os import mkdir, path
 
 from keboola.component.base import ComponentBase, sync_action
-from keboola.component.dao import SupportedDataTypes, BaseType, ColumnDefinition
+from keboola.component.dao import BaseType, ColumnDefinition, SupportedDataTypes
 from keboola.component.exceptions import UserException
 from keboola.component.sync_actions import MessageType, SelectElement, ValidationResult
 from keboola.utils.header_normalizer import NormalizerStrategy, get_normalizer
@@ -60,6 +61,115 @@ REQUIRED_IMAGE_PARS = []
 
 DEFAULT_LOGIN_METHOD = "security_token"
 
+# the listSkills response shall be generated based on user config in a very near future,
+# so I just hardcoded it here for now
+LIST_SKILLS_STATIC_RESPONSE = [
+    {
+        "name": "Get Salesforce contacts",
+        "description": "Returns list of Salesforce contacts.",
+        "parameters": [
+            {
+                "name": "action",
+                "type": "string",
+                "required": True,
+                "enum": ["runSkill"],
+            },
+            {
+                "name": "parameters",
+                "type": "object",
+                "required": True,
+                "parameters": {
+                    "name": "configData",
+                    "type": "object",
+                    "required": True,
+                    "parameters": [
+                        {
+                            "name": "object",
+                            "type": "string",
+                            "required": True,
+                            "enum": ["Contact"],
+                            "description": "String identifer of the agent skill to run.",
+                        },
+                    ],
+                },
+            },
+        ],
+        "response": {
+            "type": "object",
+            "properties": {
+                "status": {
+                    "title": "Response status",
+                    "type": "string",
+                    "enum": ["ok", "error"],
+                },
+                "number_of_records": {
+                    "title": "Number of records in the response",
+                    "type": "integer",
+                },
+                "records": {
+                    "title": "Salesforce records",
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                    },
+                },
+            },
+        },
+    },
+    {
+        "name": "Get Salesforce reports",
+        "description": "Returns list of Salesforce reports.",
+        "parameters": [
+            {
+                "name": "action",
+                "type": "string",
+                "required": True,
+                "enum": ["runSkill"],
+            },
+            {
+                "name": "parameters",
+                "type": "object",
+                "required": True,
+                "parameters": {
+                    "name": "configData",
+                    "type": "object",
+                    "required": True,
+                    "parameters": [
+                        {
+                            "name": "object",
+                            "type": "string",
+                            "required": True,
+                            "enum": ["Report"],
+                            "description": "String identifer of the agent skill to run.",
+                        },
+                    ],
+                },
+            },
+        ],
+        "response": {
+            "type": "object",
+            "properties": {
+                "status": {
+                    "title": "Response status",
+                    "type": "string",
+                    "enum": ["ok", "error"],
+                },
+                "number_of_records": {
+                    "title": "Number of records in the response",
+                    "type": "integer",
+                },
+                "records": {
+                    "title": "Salesforce records",
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                    },
+                },
+            },
+        },
+    },
+]
+
 
 class LoginType(str, Enum):
     SECURITY_TOKEN_LOGIN = "security_token"
@@ -86,13 +196,16 @@ class Component(ComponentBase):
     def __init__(self):
         super().__init__()
 
-    def run(self):
+    def run(self, return_json=False):
         self.validate_configuration_parameters(REQUIRED_PARAMETERS)
         self.validate_image_parameters(REQUIRED_IMAGE_PARS)
 
         start_run_time = str(datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z"))
 
         params = self.configuration.parameters
+
+        logging.info("%s", json.dumps(params, indent=4))
+
         loading_options = params.get(KEY_LOADING_OPTIONS, {})
 
         bucket_name = params.get(KEY_BUCKET_NAME, self.get_bucket_name())
@@ -129,6 +242,17 @@ class Component(ComponentBase):
         total_records = sum(result.get("number_of_records", 0) for result in results)
         logging.debug([result for result in results])
         logging.info(f"Downloaded {total_records} records in total")
+
+        if return_json:
+            for result in results:
+                if "file" not in result:
+                    result["status"] = "fileError"
+                    continue
+                result["records"] = list(self._csv_result_to_dict(result.pop("file")))
+                result["status"] = "ok"
+            with open("response.json", "w") as f:
+                json.dump(results, f)
+            return results
 
         # remove headers and get columns
         output_columns = self._fix_header_from_csv(results)
@@ -176,6 +300,12 @@ class Component(ComponentBase):
                     writer.writerow(row)
             os.replace(temp_file_path, result_file_path)
         return expected_header
+
+    def _csv_result_to_dict(self, filename: str):
+        with open(filename) as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                yield row
 
     def set_proxy(self) -> None:
         """Sets proxy if defined"""
@@ -419,9 +549,9 @@ class Component(ComponentBase):
     @staticmethod
     def process_salesforce_domain(url):
         if url.startswith("http://"):
-            url = url[len("http://"):]
+            url = url[len("http://") :]
         if url.startswith("https://"):
-            url = url[len("https://"):]
+            url = url[len("https://") :]
         if url.endswith(".salesforce.com"):
             url = url[: -len(".salesforce.com")]
 
@@ -618,6 +748,17 @@ class Component(ComponentBase):
             return self._get_object_fields_names_and_normalized_values(object_name)
         else:
             raise UserException(f"Invalid {KEY_QUERY_TYPE}")
+
+    @sync_action("runSkill")
+    def sync_run_component(self):
+        """
+        Run the component as a skill for an AI agent
+        """
+        return self.run(return_json=True)
+
+    @sync_action("listSkills")
+    def list_skills(self):
+        return LIST_SKILLS_STATIC_RESPONSE
 
     def _get_object_name_from_custom_query(self) -> str:
         params = self.configuration.parameters

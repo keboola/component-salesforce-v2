@@ -157,6 +157,20 @@
             }
           }
         },
+        "incremental_overlap_seconds": {
+          "title": "Incremental Overlap (seconds)",
+          "type": "integer",
+          "default": 0,
+          "minimum": 0,
+          "description": "Number of seconds to subtract from the last watermark to prevent missing records due to clock skew or delayed commits. Default is 0 (no overlap).",
+          "propertyOrder": 350,
+          "options": {
+            "dependencies": {
+              "incremental": 1,
+              "incremental_fetch": true
+            }
+          }
+        },
         "incremental": {
           "type": "integer",
           "enum": [

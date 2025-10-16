@@ -3,7 +3,7 @@ import logging
 import os
 import shutil
 from collections import OrderedDict
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from enum import Enum
 from os import mkdir, path
 
@@ -40,6 +40,7 @@ KEY_LOADING_OPTIONS = "loading_options"
 KEY_LOADING_OPTIONS_INCREMENTAL = "incremental"
 KEY_LOADING_OPTIONS_INCREMENTAL_FIELD = "incremental_field"
 KEY_LOADING_OPTIONS_INCREMENTAL_FETCH = "incremental_fetch"
+KEY_LOADING_OPTIONS_INCREMENTAL_OVERLAP_SECONDS = "incremental_overlap_seconds"
 KEY_LOADING_OPTIONS_PKEY = "pkey"
 
 # Proxy
@@ -450,6 +451,7 @@ class Component(ComponentBase):
         incremental = loading_options.get(KEY_LOADING_OPTIONS_INCREMENTAL, False)
         incremental_field = loading_options.get(KEY_LOADING_OPTIONS_INCREMENTAL_FIELD)
         incremental_fetch = loading_options.get(KEY_LOADING_OPTIONS_INCREMENTAL_FETCH)
+        incremental_overlap_seconds = loading_options.get(KEY_LOADING_OPTIONS_INCREMENTAL_OVERLAP_SECONDS, 0)
         is_deleted = params.get(KEY_IS_DELETED, False)
         query_type = params.get(KEY_QUERY_TYPE)
         fields = params.get(KEY_FIELDS, None)
@@ -492,7 +494,20 @@ class Component(ComponentBase):
             raise UserException(f"Either {KEY_SOQL_QUERY} or {KEY_OBJECT} parameters must be specified.")
 
         if incremental and incremental_fetch and incremental_field and last_run:
-            soql_query.set_query_to_incremental(incremental_field, last_run)
+            adjusted_last_run = last_run
+            if incremental_overlap_seconds and incremental_overlap_seconds > 0:
+                try:
+                    last_run_dt = datetime.strptime(last_run, "%Y-%m-%dT%H:%M:%S.%fZ")
+                    adjusted_last_run_dt = last_run_dt - timedelta(seconds=incremental_overlap_seconds)
+                    adjusted_last_run = adjusted_last_run_dt.strftime("%Y-%m-%dT%H:%M:%S.000Z")
+                    logging.info(
+                        f"Applying incremental overlap of {incremental_overlap_seconds} seconds. "
+                        f"Original watermark: {last_run}, Adjusted watermark: {adjusted_last_run}"
+                    )
+                except ValueError as e:
+                    logging.warning(f"Could not parse last_run timestamp '{last_run}': {e}. Using original value.")
+                    adjusted_last_run = last_run
+            soql_query.set_query_to_incremental(incremental_field, adjusted_last_run)
         elif incremental and incremental_fetch and not incremental_field:
             raise UserException(
                 "Incremental field is not specified, if you want to use incremental fetching, it must specified."

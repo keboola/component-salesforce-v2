@@ -495,18 +495,24 @@ class Component(ComponentBase):
 
         if incremental and incremental_fetch and incremental_field and last_run:
             adjusted_last_run = last_run
-            if incremental_overlap_seconds and incremental_overlap_seconds > 0:
-                try:
-                    last_run_dt = datetime.strptime(last_run, "%Y-%m-%dT%H:%M:%S.%fZ")
-                    adjusted_last_run_dt = last_run_dt - timedelta(seconds=incremental_overlap_seconds)
-                    adjusted_last_run = adjusted_last_run_dt.strftime("%Y-%m-%dT%H:%M:%S.000Z")
-                    logging.info(
-                        f"Applying incremental overlap of {incremental_overlap_seconds} seconds. "
-                        f"Original watermark: {last_run}, Adjusted watermark: {adjusted_last_run}"
+            if incremental_overlap_seconds:
+                if incremental_overlap_seconds < 0:
+                    logging.warning(
+                        f"Invalid incremental_overlap_seconds value: {incremental_overlap_seconds}. "
+                        f"Value must be non-negative. Using 0 (no overlap)."
                     )
-                except ValueError as e:
-                    logging.warning(f"Could not parse last_run timestamp '{last_run}': {e}. Using original value.")
-                    adjusted_last_run = last_run
+                elif incremental_overlap_seconds > 0:
+                    try:
+                        last_run_dt = datetime.strptime(last_run, "%Y-%m-%dT%H:%M:%S.%fZ")
+                        adjusted_last_run_dt = last_run_dt - timedelta(seconds=incremental_overlap_seconds)
+                        adjusted_last_run = adjusted_last_run_dt.strftime("%Y-%m-%dT%H:%M:%S.000Z")
+                        logging.info(
+                            f"Applying incremental overlap of {incremental_overlap_seconds} seconds. "
+                            f"Original watermark: {last_run}, Adjusted watermark: {adjusted_last_run}"
+                        )
+                    except ValueError as e:
+                        logging.warning(f"Could not parse last_run timestamp '{last_run}': {e}. Using original value.")
+                        adjusted_last_run = last_run
             soql_query.set_query_to_incremental(incremental_field, adjusted_last_run)
         elif incremental and incremental_fetch and not incremental_field:
             raise UserException(

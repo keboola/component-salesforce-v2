@@ -106,6 +106,11 @@ It can override the table name with the parameter **output_table_name** and the 
 Incremental fetching allows the fetching of only the records that have been modified since the previous run of
 the component. This is done by specifying an incremental field in the object that contains data on when it wast last modified.
 
+#### Incremental Overlap
+
+To prevent missing records due to clock skew or delayed commits in distributed systems, you can configure an overlap period using the `incremental_overlap_seconds` parameter. When set, this parameter subtracts the specified number of seconds from the last watermark, ensuring that records near the boundary are re-fetched.
+
+**Note:** When using overlap, duplicate records may be fetched. However, since incremental mode is configured with a primary key, duplicates will be automatically deduplicated during the loading process.
 
 **Example: With Security Token**
 
@@ -126,7 +131,8 @@ the component. This is done by specifying an incremental field in the object tha
         "Id"
       ],
       "incremental_field": "lastmodifieddate",
-      "incremental_fetch": true
+      "incremental_fetch": true,
+      "incremental_overlap_seconds": 60
     }
   }
 }

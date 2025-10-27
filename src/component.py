@@ -123,7 +123,8 @@ class Component(ComponentBase):
         )
         self.create_sliced_directory(table.full_path)
 
-        self._test_query(salesforce_client, soql_query, True)
+        is_deleted = params.get(KEY_IS_DELETED, False)
+        self._test_query(salesforce_client, soql_query, True, is_deleted)
 
         results = salesforce_client.download(soql_query, table.full_path)
         logging.info(f"Downloaded {len(results)} files")
@@ -217,9 +218,9 @@ class Component(ComponentBase):
         logging.info("Component will use proxy server.")
 
     @staticmethod
-    def _test_query(salesforce_client, soql_query, add_limit: bool = False):
+    def _test_query(salesforce_client, soql_query, add_limit: bool = False, include_deleted: bool = False):
         try:
-            result = salesforce_client.test_query(soql_query=soql_query, add_limit=add_limit)
+            result = salesforce_client.test_query(soql_query=soql_query, add_limit=add_limit, include_deleted=include_deleted)
             return result
         except SalesforceClientException as e:
             raise UserException(e) from e

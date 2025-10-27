@@ -163,16 +163,51 @@ class SalesforceClient(HttpClient):
                 raise SalesforceClientException(e)
             logging.exception(e)
 
-    def test_query(self, soql_query: SoqlQuery, add_limit: bool = False) -> Iterator:
-        """Test query has been implemented to prevent long timeouts of batched queries."""
+    def test_query(self, soql_query: SoqlQuery, add_limit: bool = False, include_deleted: bool = False) -> Iterator:
+        """Test query has been implemented to prevent long timeouts of batched queries.
+        
+        Args:
+            soql_query: The SOQL query to test
+            add_limit: Whether to add a LIMIT clause to the query
+            include_deleted: Whether to use queryAll endpoint for deleted/archived records
+        
+        Returns:
+            Query result iterator
+        """
         test_query = copy.deepcopy(soql_query)
         if add_limit:
             test_query.add_limit()
+        
+        query_length = len(test_query.query)
+        logging.debug(f"Test query length: {query_length} characters")
+        
+        use_post = query_length > 1500
+        endpoint = 'queryAll' if include_deleted else 'query'
+        
         try:
             logging.info("Running test SOQL.")
-            result = self.simple_client.query(test_query.query)
-        except (SalesforceMalformedRequest, SalesforceClientException):
-            raise SalesforceClientException(f"Test Query {test_query.query} failed, please re-check the query.")
+            if use_post:
+                logging.debug(f"Using POST method for {endpoint} due to query length ({query_length} chars)")
+                result = self.simple_client.restful(endpoint, method='POST', json={'q': test_query.query})
+            else:
+                if include_deleted:
+                    result = self.simple_client.query_all(test_query.query)
+                else:
+                    result = self.simple_client.query(test_query.query)
+        except (SalesforceMalformedRequest, SalesforceClientException) as e:
+            error_str = str(e)
+            if ('414' in error_str or '431' in error_str) and not use_post:
+                logging.warning(f"Query failed with {error_str}, retrying with POST method")
+                try:
+                    result = self.simple_client.restful(endpoint, method='POST', json={'q': test_query.query})
+                except Exception as retry_error:
+                    raise SalesforceClientException(
+                        f"Test Query failed (length: {query_length} chars). Error: {retry_error}"
+                    ) from retry_error
+            else:
+                raise SalesforceClientException(
+                    f"Test Query failed (length: {query_length} chars). Error: {e}"
+                ) from e
 
         logging.info("Test query has been successful.")
         return result

@@ -1,6 +1,6 @@
 backoff==2.2.1; python_version >= '3.7' and python_version < '4.0'
 freezegun==1.5.1; python_version >= '3.7'
-keboola.component==1.6.10; python_version >= '3.7'
+keboola.component @ git+https://github.com/keboola/python-component.git@devin/1770659076-agent-schema-agent-code; python_version >= '3.7'
 keboola.http-client==1.0.1; python_version >= '3.7'
 keboola.utils==1.1.0; python_version >= '3.7'
 mock==5.1.0; python_version >= '3.6'

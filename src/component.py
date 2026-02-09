@@ -690,6 +690,11 @@ class Component(ComponentBase):
 
         return [SelectElement(label=column, value=column_values[i]) for i, column in enumerate(columns)]
 
+    def get_agent_context(self) -> dict:
+        params = self.configuration.parameters
+        sf_client = self.get_salesforce_client(params)
+        return {'sf': sf_client.simple_client}
+
     def _get_first_result_from_custom_soql(self) -> dict:
         params = self.configuration.parameters
         salesforce_client = self.get_salesforce_client(params)

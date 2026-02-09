@@ -4,6 +4,7 @@ on:
     branches:
       - 'feature/*'
       - 'bug/*'
+      - 'devin/*'
     tags:
       - '*' # Skip the workflow on the main branch without tags
 

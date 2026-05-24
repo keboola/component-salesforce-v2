@@ -125,7 +125,10 @@ class Component(ComponentBase):
 
         self._test_query(salesforce_client, soql_query, True)
 
-        results = salesforce_client.download(soql_query, table.full_path)
+        try:
+            results = salesforce_client.download(soql_query, table.full_path)
+        except SalesforceClientException as e:
+            raise UserException(str(e)) from e
         logging.info(f"Downloaded {len(results)} files")
         total_records = sum(result.get("number_of_records", 0) for result in results)
         logging.debug([result for result in results])

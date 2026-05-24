@@ -13,7 +13,7 @@ from simple_salesforce.exceptions import SalesforceBulkV2LoadError, SalesforceEx
 
 from .soql_query import SoqlQuery
 
-NON_SUPPORTED_BULK_FIELD_TYPES = ["address", "location", "base64"]
+NON_SUPPORTED_BULK_FIELD_TYPES = ["address", "location", "base64", "blob"]
 
 # Some objects are not supported by bulk and there is no exact way to determine them, they must be set like this
 # https://help.salesforce.com/s/articleView?id=000383508&type=1
@@ -158,6 +158,14 @@ class SalesforceClient(HttpClient):
             logging.info("SOQL ran successfully")
 
             return query_results
+        except SalesforceMalformedRequest as e:
+            error_message = str(e)
+            if "Blob field not supported" in error_message or "blob" in error_message.lower():
+                raise SalesforceClientException(
+                    f"Query contains blob fields which are not supported by Salesforce Bulk API 2.0. "
+                    f"Please remove blob fields from your query. Original error: {e}"
+                ) from e
+            raise SalesforceClientException(f"Salesforce API error: {e}") from e
         except SalesforceBulkV2LoadError as e:
             if fail_on_error:
                 raise SalesforceClientException(e)

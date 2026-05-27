@@ -1,6 +1,7 @@
 import copy
 import logging
 import os
+import time
 from collections import OrderedDict
 from typing import Any, Iterator
 from urllib.parse import urlparse
@@ -9,7 +10,12 @@ import backoff
 from keboola.http_client import HttpClient
 from simple_salesforce.api import Salesforce, SFType
 from simple_salesforce.bulk2 import ColumnDelimiter, LineEnding, Operation, QueryResult, SFBulk2Type
-from simple_salesforce.exceptions import SalesforceBulkV2LoadError, SalesforceExpiredSession, SalesforceMalformedRequest
+from simple_salesforce.exceptions import (
+    SalesforceBulkV2LoadError,
+    SalesforceExpiredSession,
+    SalesforceGeneralError,
+    SalesforceMalformedRequest,
+)
 
 from .soql_query import SoqlQuery
 
@@ -32,6 +38,15 @@ DEFAULT_QUERY_PAGE_SIZE = 50000
 # default as previous versions of this component ex-salesforce-v2 had 40.0
 DEFAULT_API_VERSION = "52.0"
 MAX_RETRIES = 3
+BULK_DOWNLOAD_MAX_RETRIES = 3
+
+# Salesforce error codes that are transient and safe to retry
+RETRYABLE_SALESFORCE_ERROR_CODES = {
+    "UNEXPECTED_EXCEPTION",
+    "SERVER_UNAVAILABLE",
+    "UNABLE_TO_LOCK_ROW",
+    "REQUEST_RUNNING_TOO_LONG",
+}
 
 
 class SalesforceClientException(Exception):
@@ -148,20 +163,49 @@ class SalesforceClient(HttpClient):
     def is_bulk_supported_field(field: OrderedDict) -> bool:
         return field["type"] not in NON_SUPPORTED_BULK_FIELD_TYPES
 
+    @staticmethod
+    def _is_retryable_error(error: Exception) -> bool:
+        """Check if a Salesforce error is transient and safe to retry."""
+        if isinstance(error, SalesforceGeneralError):
+            error_content = str(error)
+            return any(code in error_content for code in RETRYABLE_SALESFORCE_ERROR_CODES)
+        return False
+
     def download(self, soql_query: SoqlQuery, path: str, fail_on_error: bool = False,
                  query_page_size: int = DEFAULT_QUERY_PAGE_SIZE) -> list[QueryResult]:
-        try:
-            bulk2 = SalesforceBulk2(self.simple_client, soql_query.sf_object)
+        last_exception = None
+        for attempt in range(1, BULK_DOWNLOAD_MAX_RETRIES + 1):
+            try:
+                bulk2 = SalesforceBulk2(self.simple_client, soql_query.sf_object)
 
-            logging.info(f"Running SOQL : {soql_query.query}")
-            query_results = bulk2.download(soql_query.query, path, max_records=query_page_size)
-            logging.info("SOQL ran successfully")
+                logging.info(f"Running SOQL : {soql_query.query}")
+                query_results = bulk2.download(soql_query.query, path, max_records=query_page_size)
+                logging.info("SOQL ran successfully")
 
-            return query_results
-        except SalesforceBulkV2LoadError as e:
-            if fail_on_error:
-                raise SalesforceClientException(e)
-            logging.exception(e)
+                return query_results
+            except SalesforceBulkV2LoadError as e:
+                if fail_on_error:
+                    raise SalesforceClientException(e)
+                logging.exception(e)
+                return []
+            except SalesforceGeneralError as e:
+                last_exception = e
+                if self._is_retryable_error(e) and attempt < BULK_DOWNLOAD_MAX_RETRIES:
+                    wait_seconds = 2 ** attempt * 5
+                    logging.warning(
+                        f"Transient Salesforce error on attempt {attempt}/{BULK_DOWNLOAD_MAX_RETRIES}: {e}. "
+                        f"Retrying in {wait_seconds}s..."
+                    )
+                    time.sleep(wait_seconds)
+                    continue
+                logging.error(f"Salesforce error after {attempt} attempt(s): {e}")
+                raise SalesforceClientException(
+                    f"Bulk download failed after {attempt} attempt(s): {e}"
+                ) from e
+
+        raise SalesforceClientException(
+            f"Bulk download failed after {BULK_DOWNLOAD_MAX_RETRIES} attempts"
+        ) from last_exception
 
     def test_query(self, soql_query: SoqlQuery, add_limit: bool = False) -> Iterator:
         """Test query has been implemented to prevent long timeouts of batched queries."""

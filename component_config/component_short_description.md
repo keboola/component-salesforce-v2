@@ -1,1 +1,1 @@
-A customer relationship management service (CRM) 
+Extracts Salesforce objects or SOQL query results.

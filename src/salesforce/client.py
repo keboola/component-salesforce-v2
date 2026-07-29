@@ -36,7 +36,10 @@ DEFAULT_QUERY_PAGE_SIZE = 50000
 DEFAULT_API_VERSION = "52.0"
 MAX_RETRIES = 3
 
-# urllib3 waits TRANSPORT_RETRY_BACKOFF_FACTOR * 2 ** (attempt - 1) seconds between transport retries.
+# urllib3 does not wait before the first transport retry; from the second one it waits
+# TRANSPORT_RETRY_BACKOFF_FACTOR * 2 ** (n - 1) seconds. At factor 1 the sleeps are 0, 2 and 4 s, so a request that
+# ultimately fails takes about 6 s longer than it used to. The describe_object* backoff.expo wrapper retries the whole
+# call, so its own waits can stack on top of these.
 TRANSPORT_RETRY_BACKOFF_FACTOR = 1
 
 
@@ -101,10 +104,21 @@ class SalesforceClient(HttpClient):
 
         Salesforce occasionally closes a connection without answering, which reaches the component as
         requests.exceptions.ConnectionError("('Connection aborted.', RemoteDisconnected(...))") and kills the
-        whole job. Only transport failures are retried, and only for the idempotent methods urllib3 allows by
-        default. HTTP responses are never retried (status=0 and no status_forcelist), so every response the
-        component already handled - including error responses - is passed through untouched. Once the retries
-        are exhausted the original exception propagates exactly as before.
+        whole job. Only transport failures are retried. A failure after the request went out (urllib3's read
+        branch) is gated on allowed_methods, so a POST is never re-sent once Salesforce could have seen it;
+        connect-phase failures, which urllib3 raises only when the server provably never received the request,
+        are retried for every method.
+
+        No HTTP response is ever retried. That invariant is carried by three settings together: total=None makes
+        Retry.is_retry() short-circuit to False for every status, the empty status_forcelist with status=0 keeps
+        it False if total is ever given a number, and respect_retry_after_header=False closes the remaining path
+        where a 413/429/503 carrying Retry-After could be acted on. Every response the component already handled
+        - including error responses - is therefore passed through untouched.
+
+        Coverage is the pre-response phase inside HTTPAdapter.send only. A bulk result download dropped
+        mid-body surfaces out of iter_content as requests.exceptions.ChunkedEncodingError, which nothing retries
+        and which leaves a partial CSV in the output path - pre-existing behaviour, deliberately unchanged here.
+        Once the retries are exhausted the original exception propagates exactly as before.
         """
         retry = Retry(
             total=None,
@@ -112,6 +126,7 @@ class SalesforceClient(HttpClient):
             read=MAX_RETRIES,
             status=0,
             other=0,
+            respect_retry_after_header=False,
             backoff_factor=TRANSPORT_RETRY_BACKOFF_FACTOR,
         )
         adapter = HTTPAdapter(max_retries=retry)

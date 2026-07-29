@@ -5,7 +5,9 @@ Created on 12. 11. 2018
 '''
 import contextlib
 import json
+import socket
 import tempfile
+import threading
 import unittest
 import mock
 import os
@@ -16,10 +18,64 @@ from requests.exceptions import ConnectionError as RequestsConnectionError
 from component import Component
 from salesforce.client import SalesforceClient
 
-# What requests raises when Salesforce closes the connection without sending a response.
-DROPPED_CONNECTION = RequestsConnectionError(
-    "('Connection aborted.', RemoteDisconnected('Remote end closed connection without response'))"
-)
+
+def dropped_connection() -> RequestsConnectionError:
+    """A fresh instance of what requests raises when Salesforce closes the connection without responding.
+
+    Built per call on purpose: one shared instance would be raised repeatedly and accumulate __traceback__
+    frames across retries and across tests.
+    """
+    return RequestsConnectionError(
+        "('Connection aborted.', RemoteDisconnected('Remote end closed connection without response'))"
+    )
+
+
+def raise_dropped_connection(*_args, **_kwargs):
+    """mock side_effect raising a fresh dropped_connection() on every call."""
+    raise dropped_connection()
+
+
+class LocalHttpServer:
+    """A local TCP server used to exercise the mounted retry adapter against real socket behaviour.
+
+    With no response configured it accepts, reads the request and closes without answering - the failure this
+    PR is about. With one configured it replies with those exact bytes. Binds to port 0 and runs on a daemon
+    thread with short timeouts so it cannot hang or collide with anything in CI.
+    """
+
+    def __init__(self, response: bytes = None) -> None:
+        self._response = response
+        self.connection_count = 0
+        self._socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self._socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self._socket.bind(('127.0.0.1', 0))
+        self._socket.listen(8)
+        self._socket.settimeout(0.5)
+        self.url = f'http://127.0.0.1:{self._socket.getsockname()[1]}/'
+        self._stop = threading.Event()
+        self._thread = threading.Thread(target=self._serve, daemon=True)
+        self._thread.start()
+
+    def _serve(self) -> None:
+        while not self._stop.is_set():
+            try:
+                connection, _ = self._socket.accept()
+            except OSError:
+                continue
+            self.connection_count += 1
+            with contextlib.closing(connection):
+                connection.settimeout(0.5)
+                try:
+                    connection.recv(65536)
+                    if self._response is not None:
+                        connection.sendall(self._response)
+                except OSError:
+                    pass
+
+    def close(self) -> None:
+        self._stop.set()
+        self._socket.close()
+        self._thread.join(timeout=2)
 
 
 class TestComponent(unittest.TestCase):
@@ -64,15 +120,21 @@ class TestDroppedConnectionRetries(unittest.TestCase):
         self.assertEqual(3, retries.connect)
         self.assertEqual(3, retries.read)
         # HTTP responses must never be retried - every response the component already handled is passed through.
+        # total=None is what makes Retry.is_retry() False for every status, so pin it rather than leave it
+        # incidental; status/status_forcelist keep it False even if total is ever given a number.
+        self.assertIsNone(retries.total)
         self.assertEqual(0, retries.status)
         self.assertFalse(retries.status_forcelist)
-        # Only idempotent methods are retried, so no request with a side effect is ever re-sent.
+        self.assertFalse(retries.respect_retry_after_header)
+        # allowed_methods gates urllib3's read branch only, so this proves POST is not retried *after* the request
+        # went out - not that POST is never retried. Connect-phase failures, which urllib3 raises only when the
+        # server provably never received the request, are retried for every method.
         self.assertNotIn('POST', retries.allowed_methods)
 
     @mock.patch('time.sleep', return_value=None)
     @mock.patch('salesforce.client.SFType')
     def test_describe_object_retries_dropped_connection_then_reraises(self, sf_type, _sleep):
-        sf_type.return_value.describe.side_effect = DROPPED_CONNECTION
+        sf_type.return_value.describe.side_effect = raise_dropped_connection
         client = self._build_client()
 
         with self.assertRaises(RequestsConnectionError):
@@ -84,7 +146,7 @@ class TestDroppedConnectionRetries(unittest.TestCase):
     @mock.patch('salesforce.client.SFType')
     def test_describe_object_succeeds_after_a_dropped_connection(self, sf_type, _sleep):
         sf_type.return_value.describe.side_effect = [
-            DROPPED_CONNECTION,
+            dropped_connection(),
             {'fields': [{'name': 'Id', 'type': 'id'}, {'name': 'Photo', 'type': 'base64'}]},
         ]
         client = self._build_client()
@@ -95,7 +157,7 @@ class TestDroppedConnectionRetries(unittest.TestCase):
     @mock.patch('time.sleep', return_value=None)
     @mock.patch('component.SalesforceClient.from_security_token')
     def test_login_retries_dropped_connection_then_reraises(self, from_security_token, _sleep):
-        from_security_token.side_effect = DROPPED_CONNECTION
+        from_security_token.side_effect = raise_dropped_connection
         parameters = {'login_method': 'security_token', 'username': 'user',
                       '#password': 'password', '#security_token': 'token'}
 
@@ -103,7 +165,35 @@ class TestDroppedConnectionRetries(unittest.TestCase):
             with self.assertRaises(RequestsConnectionError):
                 comp._login_to_salesforce(comp.configuration.parameters)
 
+        # The two stacked retry decorators must not multiply attempts - each catches only its own exception type.
         self.assertEqual(3, from_security_token.call_count)
+
+    @mock.patch('salesforce.client.TRANSPORT_RETRY_BACKOFF_FACTOR', 0)
+    def test_adapter_retries_a_real_dropped_connection_and_still_raises_connection_error(self):
+        server = LocalHttpServer()
+        self.addCleanup(server.close)
+        session = requests.Session()
+        SalesforceClient._mount_transport_retries(session)
+
+        with self.assertRaises(RequestsConnectionError):
+            session.get(server.url, timeout=5)
+
+        # One initial attempt plus the three configured retries.
+        self.assertEqual(4, server.connection_count)
+
+    @mock.patch('salesforce.client.TRANSPORT_RETRY_BACKOFF_FACTOR', 0)
+    def test_adapter_passes_a_429_with_retry_after_straight_through(self):
+        server = LocalHttpServer(
+            response=b'HTTP/1.1 429 Too Many Requests\r\nRetry-After: 1\r\nContent-Length: 0\r\n\r\n'
+        )
+        self.addCleanup(server.close)
+        session = requests.Session()
+        SalesforceClient._mount_transport_retries(session)
+
+        response = session.get(server.url, timeout=5)
+
+        self.assertEqual(429, response.status_code)
+        self.assertEqual(1, server.connection_count)
 
 
 if __name__ == "__main__":

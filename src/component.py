@@ -349,7 +349,12 @@ class Component(ComponentBase):
 
     # The login request happens before the SalesforceClient exists, so it is not covered by the transport retries
     # mounted on the client session. A dropped connection is retried here and re-raised unchanged afterwards.
-    @retry((SalesforceAuthenticationFailed, RequestsConnectionError), tries=3, delay=5)
+    # The connection retry is a separate decorator so the authentication retry keeps its original timing. Stacking
+    # does not multiply attempts - each decorator catches only its own exception type, so a pure transport failure
+    # is still 3 calls. The shorter delay keeps the sync actions users wait on interactive: an input that can never
+    # work now costs 4 s of added sleep before the same error reaches the UI, not 10 s.
+    @retry(SalesforceAuthenticationFailed, tries=3, delay=5)
+    @retry(RequestsConnectionError, tries=3, delay=2)
     def _login_to_salesforce(self, params: dict) -> SalesforceClient:
         login_method = self._get_login_method()
 

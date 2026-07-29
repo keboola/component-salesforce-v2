@@ -5,6 +5,7 @@ Created on 12. 11. 2018
 '''
 import contextlib
 import json
+import logging
 import socket
 import tempfile
 import threading
@@ -64,7 +65,11 @@ class LocalHttpServer:
                 continue
             self.connection_count += 1
             with contextlib.closing(connection):
-                connection.settimeout(0.5)
+                # Generous, to match the client's own timeout=5. A recv() timing out on a loaded runner would look
+                # like a dropped connection to the client and fail the 429 test as if it were a product bug. Nothing
+                # waits on this in the happy path, so the headroom costs no test time. The listening socket keeps its
+                # short accept timeout - the serve loop just continues on it.
+                connection.settimeout(5)
                 try:
                     connection.recv(65536)
                     if self._response is not None:
@@ -108,8 +113,19 @@ class TestDroppedConnectionRetries(unittest.TestCase):
             os.makedirs(os.path.join(data_dir, 'out', 'tables'))
             with open(os.path.join(data_dir, 'config.json'), 'w', encoding='utf-8') as config_file:
                 json.dump({'parameters': parameters}, config_file)
-            with mock.patch.dict(os.environ, {'KBC_DATADIR': data_dir}):
-                yield Component()
+            # ComponentBase.__init__ adds root log handlers without removing the ones already there, so a second
+            # Component() in-process leaves the root logger with a duplicate stderr handler and every retry warning
+            # emitted afterwards is printed twice - which reads as a larger retry budget than the code actually has.
+            # Clearing before construction (not just restoring afterwards) is what keeps the counts honest while the
+            # warnings are emitted; the originals go back in the finally.
+            root_logger = logging.getLogger()
+            original_handlers = root_logger.handlers[:]
+            root_logger.handlers.clear()
+            try:
+                with mock.patch.dict(os.environ, {'KBC_DATADIR': data_dir}):
+                    yield Component()
+            finally:
+                root_logger.handlers[:] = original_handlers
 
     def test_transport_retries_are_mounted_on_the_salesforce_session(self):
         session = requests.Session()
@@ -119,6 +135,10 @@ class TestDroppedConnectionRetries(unittest.TestCase):
         retries = session.get_adapter('https://example.my.salesforce.com/').max_retries
         self.assertEqual(3, retries.connect)
         self.assertEqual(3, retries.read)
+        # Both socket tests below patch this factor away, so nothing else holds the documented timing: at 1 the
+        # sleeps are 0, 2 and 4 s, about 6 s added to a request that ultimately fails. Raising it would silently
+        # multiply that on every failing request, including the sync-action paths a user waits on.
+        self.assertEqual(1, retries.backoff_factor)
         # HTTP responses must never be retried - every response the component already handled is passed through.
         # total=None is what makes Retry.is_retry() False for every status, so pin it rather than leave it
         # incidental; status/status_forcelist keep it False even if total is ever given a number.
@@ -165,7 +185,6 @@ class TestDroppedConnectionRetries(unittest.TestCase):
             with self.assertRaises(RequestsConnectionError):
                 comp._login_to_salesforce(comp.configuration.parameters)
 
-        # The two stacked retry decorators must not multiply attempts - each catches only its own exception type.
         self.assertEqual(3, from_security_token.call_count)
 
     @mock.patch('salesforce.client.TRANSPORT_RETRY_BACKOFF_FACTOR', 0)
@@ -180,6 +199,22 @@ class TestDroppedConnectionRetries(unittest.TestCase):
 
         # One initial attempt plus the three configured retries.
         self.assertEqual(4, server.connection_count)
+
+    @mock.patch('salesforce.client.TRANSPORT_RETRY_BACKOFF_FACTOR', 0)
+    def test_adapter_does_not_resend_a_post_that_already_reached_the_server(self):
+        server = LocalHttpServer()
+        self.addCleanup(server.close)
+        session = requests.Session()
+        SalesforceClient._mount_transport_retries(session)
+
+        with self.assertRaises(RequestsConnectionError):
+            session.post(server.url, data=b'{}', timeout=5)
+
+        # The load-bearing invariant of this change, asserted behaviourally rather than through allowed_methods:
+        # the server read the request and then dropped the connection, and urllib3's read branch re-raises
+        # immediately for POST. So a Bulk 2.0 job-creation POST is never sent twice and cannot create a second bulk
+        # job. Same server, same drop, over GET takes 4 connections - see the test above.
+        self.assertEqual(1, server.connection_count)
 
     @mock.patch('salesforce.client.TRANSPORT_RETRY_BACKOFF_FACTOR', 0)
     def test_adapter_passes_a_429_with_retry_after_straight_through(self):

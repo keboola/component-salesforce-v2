@@ -348,13 +348,16 @@ class Component(ComponentBase):
             raise UserException(f"Authentication Failed : recheck your authorization parameters : {e}") from e
 
     # The login request happens before the SalesforceClient exists, so it is not covered by the transport retries
-    # mounted on the client session. A dropped connection is retried here and re-raised unchanged afterwards.
-    # The connection retry is a separate decorator so the authentication retry keeps its original timing. Stacking
-    # does not multiply attempts - each decorator catches only its own exception type, so a pure transport failure
-    # is still 3 calls. The shorter delay keeps the sync actions users wait on interactive: an input that can never
-    # work now costs 4 s of added sleep before the same error reaches the UI, not 10 s.
-    @retry(SalesforceAuthenticationFailed, tries=3, delay=5)
-    @retry(RequestsConnectionError, tries=3, delay=2)
+    # mounted on the client session. A dropped connection is retried here and re-raised unchanged afterwards -
+    # get_salesforce_client converts only SalesforceAuthenticationFailed into a UserException, so a transport failure
+    # keeps propagating exactly as it did before.
+    # One decorator over both exception types, never two stacked ones: nesting multiplies the budget, because an
+    # inner run that ends in the outer decorator's exception is re-entered with a fresh inner budget, making the
+    # worst case tries x tries. Measured on an alternating connection/authentication sequence, two stacked
+    # decorators give 9 login attempts and 22 s of sleep, in either nesting order; this combined form has a hard
+    # 3-attempt cap. Cost on the sync actions users wait on interactively: an input that can never work takes
+    # 10 s of added sleep (2 retries x 5 s) before the same error reaches the UI.
+    @retry((SalesforceAuthenticationFailed, RequestsConnectionError), tries=3, delay=5)
     def _login_to_salesforce(self, params: dict) -> SalesforceClient:
         login_method = self._get_login_method()
 

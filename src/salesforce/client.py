@@ -38,8 +38,8 @@ MAX_RETRIES = 3
 
 # urllib3 does not wait before the first transport retry; from the second one it waits
 # TRANSPORT_RETRY_BACKOFF_FACTOR * 2 ** (n - 1) seconds. At factor 1 the sleeps are 0, 2 and 4 s, so a request that
-# ultimately fails takes about 6 s longer than it used to. The describe_object* backoff.expo wrapper retries the whole
-# call, so its own waits can stack on top of these.
+# ultimately fails takes about 6 s longer than it used to. This applies to the requests that go through the session
+# below; the describe_object* calls do not, so their backoff.expo waits never stack on top of these.
 TRANSPORT_RETRY_BACKOFF_FACTOR = 1
 
 

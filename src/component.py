@@ -353,10 +353,10 @@ class Component(ComponentBase):
     # keeps propagating exactly as it did before.
     # One decorator over both exception types, never two stacked ones: nesting multiplies the budget, because an
     # inner run that ends in the outer decorator's exception is re-entered with a fresh inner budget, making the
-    # worst case tries x tries. Measured on an alternating connection/authentication sequence, two stacked
-    # decorators give 9 login attempts and 22 s of sleep, in either nesting order; this combined form has a hard
-    # 3-attempt cap. Cost on the sync actions users wait on interactively: an input that can never work takes
-    # 10 s of added sleep (2 retries x 5 s) before the same error reaches the UI.
+    # worst case tries x tries. Measured over mixed connection/authentication sequences, two stacked decorators
+    # reach 9 login attempts whichever way they are nested, up to 40 s of sleep in the worst ordering; this
+    # combined form has a hard 3-attempt cap. Cost on the sync actions users wait on interactively: an input that
+    # can never work takes 10 s of added sleep (2 retries x 5 s) before the same error reaches the UI.
     @retry((SalesforceAuthenticationFailed, RequestsConnectionError), tries=3, delay=5)
     def _login_to_salesforce(self, params: dict) -> SalesforceClient:
         login_method = self._get_login_method()

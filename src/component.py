@@ -12,6 +12,7 @@ from keboola.component.dao import SupportedDataTypes, BaseType, ColumnDefinition
 from keboola.component.exceptions import UserException
 from keboola.component.sync_actions import MessageType, SelectElement, ValidationResult
 from keboola.utils.header_normalizer import NormalizerStrategy, get_normalizer
+from requests.exceptions import ConnectionError as RequestsConnectionError
 from retry import retry
 from simple_salesforce.exceptions import SalesforceAuthenticationFailed, SalesforceError, SalesforceResourceNotFound
 
@@ -346,7 +347,9 @@ class Component(ComponentBase):
         except SalesforceAuthenticationFailed as e:
             raise UserException(f"Authentication Failed : recheck your authorization parameters : {e}") from e
 
-    @retry(SalesforceAuthenticationFailed, tries=3, delay=5)
+    # The login request happens before the SalesforceClient exists, so it is not covered by the transport retries
+    # mounted on the client session. A dropped connection is retried here and re-raised unchanged afterwards.
+    @retry((SalesforceAuthenticationFailed, RequestsConnectionError), tries=3, delay=5)
     def _login_to_salesforce(self, params: dict) -> SalesforceClient:
         login_method = self._get_login_method()
 

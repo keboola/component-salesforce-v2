@@ -6,7 +6,10 @@ from typing import Any, Iterator
 from urllib.parse import urlparse
 
 import backoff
+import requests
 from keboola.http_client import HttpClient
+from requests.adapters import HTTPAdapter, Retry
+from requests.exceptions import ConnectionError as RequestsConnectionError
 from simple_salesforce.api import Salesforce, SFType
 from simple_salesforce.bulk2 import ColumnDelimiter, LineEnding, Operation, QueryResult, SFBulk2Type
 from simple_salesforce.exceptions import SalesforceBulkV2LoadError, SalesforceExpiredSession, SalesforceMalformedRequest
@@ -33,9 +36,19 @@ DEFAULT_QUERY_PAGE_SIZE = 50000
 DEFAULT_API_VERSION = "52.0"
 MAX_RETRIES = 3
 
+# urllib3 waits TRANSPORT_RETRY_BACKOFF_FACTOR * 2 ** (attempt - 1) seconds between transport retries.
+TRANSPORT_RETRY_BACKOFF_FACTOR = 1
+
 
 class SalesforceClientException(Exception):
     pass
+
+
+# Retried by the describe_object* methods. They talk to Salesforce through SFType, which builds its own requests
+# session, so _mount_transport_retries does not cover them; RequestsConnectionError is not a subclass of the
+# built-in ConnectionError they already catch either, so a dropped connection would otherwise kill the whole job.
+# After max_tries the original exception is re-raised unchanged.
+RETRIED_DESCRIBE_ERRORS = (SalesforceClientException, RequestsConnectionError)
 
 
 class SalesforceBulk2(SFBulk2Type):
@@ -80,6 +93,30 @@ class SalesforceClient(HttpClient):
         self.api_version = api_version
         self.host = urlparse(self.simple_client.base_url).hostname
         self.sessionId = self.simple_client.session_id
+        self._mount_transport_retries(self.simple_client.session)
+
+    @staticmethod
+    def _mount_transport_retries(session: requests.Session) -> None:
+        """Retries requests that never got a response because the connection was dropped.
+
+        Salesforce occasionally closes a connection without answering, which reaches the component as
+        requests.exceptions.ConnectionError("('Connection aborted.', RemoteDisconnected(...))") and kills the
+        whole job. Only transport failures are retried, and only for the idempotent methods urllib3 allows by
+        default. HTTP responses are never retried (status=0 and no status_forcelist), so every response the
+        component already handled - including error responses - is passed through untouched. Once the retries
+        are exhausted the original exception propagates exactly as before.
+        """
+        retry = Retry(
+            total=None,
+            connect=MAX_RETRIES,
+            read=MAX_RETRIES,
+            status=0,
+            other=0,
+            backoff_factor=TRANSPORT_RETRY_BACKOFF_FACTOR,
+        )
+        adapter = HTTPAdapter(max_retries=retry)
+        session.mount("https://", adapter)
+        session.mount("http://", adapter)
 
     @classmethod
     def from_connected_app(cls, username: str, password: str, consumer_key: str, consumer_secret: str, sandbox: str,
@@ -110,7 +147,7 @@ class SalesforceClient(HttpClient):
 
         return cls(simple_client=simple_client, api_version=api_version)
 
-    @backoff.on_exception(backoff.expo, SalesforceClientException, max_tries=3)
+    @backoff.on_exception(backoff.expo, RETRIED_DESCRIBE_ERRORS, max_tries=3)
     def describe_object(self, sf_object: str) -> list[str]:
         salesforce_type = SFType(sf_object, self.sessionId, self.host, sf_version=self.api_version)
 
@@ -121,7 +158,7 @@ class SalesforceClient(HttpClient):
 
         return [field['name'] for field in object_desc['fields'] if self.is_bulk_supported_field(field)]
 
-    @backoff.on_exception(backoff.expo, SalesforceClientException, max_tries=3)
+    @backoff.on_exception(backoff.expo, RETRIED_DESCRIBE_ERRORS, max_tries=3)
     def describe_object_w_metadata(self, sf_object: str) -> list[tuple[str, str]]:
         salesforce_type = SFType(sf_object, self.sessionId, self.host, sf_version=self.api_version)
 
@@ -133,7 +170,7 @@ class SalesforceClient(HttpClient):
         return [(field['name'], field['type']) for field in object_desc['fields']
                 if self.is_bulk_supported_field(field)]
 
-    @backoff.on_exception(backoff.expo, SalesforceClientException, max_tries=3)
+    @backoff.on_exception(backoff.expo, RETRIED_DESCRIBE_ERRORS, max_tries=3)
     def describe_object_w_complete_metadata(self, sf_object: str) -> dict[str, Any]:
         salesforce_type = SFType(sf_object, self.sessionId, self.host, sf_version=self.api_version)
 

@@ -16,8 +16,11 @@ import requests
 from freezegun import freeze_time
 from requests.exceptions import ConnectionError as RequestsConnectionError
 
+from requests.exceptions import ChunkedEncodingError
+from urllib3.exceptions import ProtocolError
+
 from component import Component
-from salesforce.client import SalesforceClient
+from salesforce.client import DOWNLOAD_RESULT_MAX_TRIES, SalesforceBulk2, SalesforceClient
 
 
 def dropped_connection() -> RequestsConnectionError:
@@ -34,6 +37,25 @@ def dropped_connection() -> RequestsConnectionError:
 def raise_dropped_connection(*_args, **_kwargs):
     """mock side_effect raising a fresh dropped_connection() on every call."""
     raise dropped_connection()
+
+
+def truncated_result_page() -> ChunkedEncodingError:
+    """What requests raises out of iter_content when Salesforce cuts a result body short.
+
+    Built the way requests builds it - urllib3 raises ProtocolError("Response ended prematurely") while reading
+    the body and requests re-raises it as ChunkedEncodingError - so str() matches the message seen in production.
+    """
+    return ChunkedEncodingError(ProtocolError("Response ended prematurely"))
+
+
+def raise_truncated_result_page(*_args, **_kwargs):
+    """mock side_effect raising a fresh truncated_result_page() on every call.
+
+    A single shared instance handed to side_effect would be re-raised on every retry and accumulate
+    __traceback__ frames across them, so each attempt gets its own - the same reason
+    raise_dropped_connection exists.
+    """
+    raise truncated_result_page()
 
 
 class LocalHttpServer:
@@ -229,6 +251,145 @@ class TestDroppedConnectionRetries(unittest.TestCase):
 
         self.assertEqual(429, response.status_code)
         self.assertEqual(1, server.connection_count)
+
+
+class TestTruncatedResultPageRetries(unittest.TestCase):
+    """A result page Salesforce cut short is retried instead of killing the job, and still fails when it persists.
+
+    The transport retries mounted on the session cannot reach this failure: it is raised while the response body
+    is being read, after HTTPAdapter.send has already handed the response back. These tests pin both halves - the
+    retry works, and the directory the pages are written into never gains a truncated slice because of it.
+    """
+
+    @staticmethod
+    def _build_bulk2() -> SalesforceBulk2:
+        simple_client = mock.MagicMock()
+        simple_client.bulk2_url = 'https://example.my.salesforce.com/services/data/v52.0/jobs/'
+        simple_client.headers = {}
+        simple_client.session = requests.Session()
+        bulk2 = SalesforceBulk2(simple_client, 'Opportunity')
+        bulk2._client = mock.MagicMock()
+        return bulk2
+
+    @staticmethod
+    def _page(path: str, contents: bytes, locator: str = '', number_of_records: int = 1) -> dict:
+        """Writes a page file the way simple_salesforce does - a fresh temp file inside the download directory."""
+        with tempfile.NamedTemporaryFile('wb', dir=path, suffix='.csv', delete=False) as page_file:
+            page_file.write(contents)
+        return {'locator': locator, 'number_of_records': number_of_records, 'file': page_file.name}
+
+    @mock.patch('time.sleep', return_value=None)
+    def test_truncated_page_is_retried_then_reraises(self, _sleep):
+        bulk2 = self._build_bulk2()
+        bulk2._client.download_job_data.side_effect = raise_truncated_result_page
+
+        with tempfile.TemporaryDirectory() as path:
+            with self.assertRaises(ChunkedEncodingError):
+                bulk2._download_result_page(path, 'job-id', '', 50000)
+
+        self.assertEqual(DOWNLOAD_RESULT_MAX_TRIES, bulk2._client.download_job_data.call_count)
+
+    @mock.patch('time.sleep', return_value=None)
+    def test_truncated_page_succeeds_after_a_retry(self, _sleep):
+        bulk2 = self._build_bulk2()
+
+        with tempfile.TemporaryDirectory() as path:
+            expected = {'locator': '', 'number_of_records': 2, 'file': 'page.csv'}
+            bulk2._client.download_job_data.side_effect = [truncated_result_page(), expected]
+
+            self.assertEqual(expected, bulk2._download_result_page(path, 'job-id', '', 50000))
+
+        self.assertEqual(2, bulk2._client.download_job_data.call_count)
+        # Every attempt asks for the same page. Re-requesting a locator is what makes the retry safe, so a change
+        # that started advancing the locator between attempts - and silently skipped records - must fail here.
+        self.assertEqual([mock.call(mock.ANY, 'job-id', '', 50000)] * 2,
+                         bulk2._client.download_job_data.call_args_list)
+
+    @mock.patch('time.sleep', return_value=None)
+    def test_the_partial_file_of_a_retried_attempt_is_discarded(self, _sleep):
+        bulk2 = self._build_bulk2()
+
+        with tempfile.TemporaryDirectory() as path:
+            already_downloaded = self._page(path, b'Id\n1\n')
+
+            def truncate_then_succeed(page_path, *_args, **_kwargs):
+                if bulk2._client.download_job_data.call_count == 1:
+                    self._page(page_path, b'Id\n2')  # the half-written file simple_salesforce leaves behind
+                    raise truncated_result_page()
+                return self._page(page_path, b'Id\n2\n3\n')
+
+            bulk2._client.download_job_data.side_effect = truncate_then_succeed
+
+            result = bulk2._download_result_page(path, 'job-id', '', 50000)
+
+            # The page downloaded before the failure survives, the truncated one is gone, and the retry's own file
+            # is the only thing added - so the sliced output directory can never gain a partial or duplicate slice.
+            expected = sorted([os.path.basename(already_downloaded['file']), os.path.basename(result['file'])])
+            self.assertEqual(expected, sorted(os.listdir(path)))
+
+    @mock.patch('time.sleep', return_value=None)
+    def test_the_final_attempt_leaves_the_directory_exactly_as_it_used_to(self, _sleep):
+        """The give-up path is untouched: same exception, and the last attempt's file is still left behind.
+
+        This is what makes the change defensive rather than behavioural - a download that keeps failing ends in
+        precisely the state it ended in before the retry existed.
+        """
+        bulk2 = self._build_bulk2()
+
+        with tempfile.TemporaryDirectory() as path:
+            def always_truncate(page_path, *_args, **_kwargs):
+                self._page(page_path, b'Id\n2')
+                raise truncated_result_page()
+
+            bulk2._client.download_job_data.side_effect = always_truncate
+
+            with self.assertRaises(ChunkedEncodingError):
+                bulk2._download_result_page(path, 'job-id', '', 50000)
+
+            # Only the last attempt's file remains: the two before it were cleaned up ahead of their retries.
+            self.assertEqual(1, len(os.listdir(path)))
+
+    def test_a_page_that_downloads_first_time_is_requested_once_and_never_waits(self):
+        """The happy path is byte-for-byte what it was: one call, no cleanup, no sleep."""
+        bulk2 = self._build_bulk2()
+
+        with tempfile.TemporaryDirectory() as path:
+            expected = self._page(path, b'Id\n1\n')
+            bulk2._client.download_job_data.return_value = expected
+
+            with mock.patch('time.sleep') as sleep:
+                self.assertEqual(expected, bulk2._download_result_page(path, 'job-id', '', 50000))
+
+            sleep.assert_not_called()
+            self.assertEqual(1, bulk2._client.download_job_data.call_count)
+            self.assertEqual([os.path.basename(expected['file'])], os.listdir(path))
+
+    @mock.patch('time.sleep', return_value=None)
+    def test_download_pages_through_the_retrying_helper(self, _sleep):
+        """The loop that walks the locators goes through the retry, so a mid-download truncation is covered."""
+        bulk2 = self._build_bulk2()
+
+        with tempfile.TemporaryDirectory() as path:
+            first = {'locator': 'page-2', 'number_of_records': 1, 'file': 'a.csv'}
+            second = {'locator': '', 'number_of_records': 1, 'file': 'b.csv'}
+            bulk2._client.download_job_data.side_effect = [first, truncated_result_page(), second]
+            bulk2._client.create_job.return_value = {'id': 'job-id'}
+
+            results = bulk2.download('SELECT Id FROM Opportunity', path)
+
+        self.assertEqual([first, second], results)
+        self.assertEqual(3, bulk2._client.download_job_data.call_count)
+
+    def test_an_error_response_is_not_mistaken_for_a_truncated_body(self):
+        """Anything other than a truncated body propagates on the first attempt, unretried and unchanged."""
+        bulk2 = self._build_bulk2()
+        bulk2._client.download_job_data.side_effect = ValueError('malformed response')
+
+        with tempfile.TemporaryDirectory() as path:
+            with self.assertRaises(ValueError):
+                bulk2._download_result_page(path, 'job-id', '', 50000)
+
+        self.assertEqual(1, bulk2._client.download_job_data.call_count)
 
 
 if __name__ == "__main__":

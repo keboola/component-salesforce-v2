@@ -1,6 +1,7 @@
 import copy
 import logging
 import os
+import time
 from collections import OrderedDict
 from typing import Any, Iterator
 from urllib.parse import urlparse
@@ -9,6 +10,7 @@ import backoff
 import requests
 from keboola.http_client import HttpClient
 from requests.adapters import HTTPAdapter, Retry
+from requests.exceptions import ChunkedEncodingError
 from requests.exceptions import ConnectionError as RequestsConnectionError
 from simple_salesforce.api import Salesforce, SFType
 from simple_salesforce.bulk2 import ColumnDelimiter, LineEnding, Operation, QueryResult, SFBulk2Type
@@ -53,6 +55,17 @@ class SalesforceClientException(Exception):
 # After max_tries the original exception is re-raised unchanged.
 RETRIED_DESCRIBE_ERRORS = (SalesforceClientException, RequestsConnectionError)
 
+# Retried by SalesforceBulk2._download_result_page. Result pages are streamed straight to disk, so a body that
+# Salesforce truncates mid-transfer surfaces out of iter_content as requests.exceptions.ChunkedEncodingError
+# ("Response ended prematurely") - raised after HTTPAdapter.send has already returned its response, which is why
+# the transport retries mounted in _mount_transport_retries provably cannot see it. Nothing else retries it, so a
+# single truncated page killed the whole job with an opaque internal error. Only this one exception is retried:
+# it can only be raised while reading a response body, never in place of a response the component already handles.
+# One delay per retry, so three attempts in total wait 2 s and then 4 s. A page that keeps failing costs 6 s more
+# than it used to before the job dies with the same exception it dies with today.
+DOWNLOAD_RESULT_RETRY_DELAYS = (2, 4)
+DOWNLOAD_RESULT_MAX_TRIES = len(DOWNLOAD_RESULT_RETRY_DELAYS) + 1
+
 
 class SalesforceBulk2(SFBulk2Type):
     def __init__(self, sf_client, object_name: str):
@@ -78,10 +91,59 @@ class SalesforceBulk2(SFBulk2Type):
         while locator:
             if locator == "INIT":
                 locator = ""
-            result = self._client.download_job_data(path, job_id, locator, max_records)
+            result = self._download_result_page(path, job_id, locator, max_records)
             locator = result["locator"]
             results.append(result)
         return results
+
+    def _download_result_page(self, path: str, job_id: str, locator: str, max_records: int) -> QueryResult:
+        """Downloads one page of bulk results, retrying a body that Salesforce truncated mid-transfer.
+
+        Re-requesting a page is safe: the results endpoint reads a completed job's stored output, so the same
+        locator returns the same records. simple_salesforce streams each page into its own uniquely named
+        temporary file inside `path` and leaves that file behind when the stream dies, so the truncated file of
+        a failed attempt is removed before the next one runs - `path` therefore holds exactly the pages it held
+        before the attempt, and a retry can never add a duplicate or partial slice.
+
+        The last attempt is the unwrapped call the loop below used to make on its own, so a download that keeps
+        failing ends with the very same exception and the very same directory contents as before this method
+        existed. Only ChunkedEncodingError is retried, and it can only be raised while a response body is being
+        read - every response the component already handled, error responses included, is passed through
+        untouched.
+        """
+        for attempt, delay in enumerate(DOWNLOAD_RESULT_RETRY_DELAYS, start=1):
+            files_before = self._list_files(path)
+            try:
+                return self._client.download_job_data(path, job_id, locator, max_records)
+            except ChunkedEncodingError as e:
+                self._discard_files_created_since(path, files_before)
+                logging.warning(f"Salesforce ended the result download prematurely ({e}). Discarded the partial "
+                                f"page and retrying in {delay} s "
+                                f"(attempt {attempt + 1} of {DOWNLOAD_RESULT_MAX_TRIES}).")
+                time.sleep(delay)
+
+        return self._client.download_job_data(path, job_id, locator, max_records)
+
+    @staticmethod
+    def _list_files(path: str) -> set[str]:
+        """Names currently in the download directory. An unreadable directory yields nothing to clean up."""
+        try:
+            return set(os.listdir(path))
+        except OSError:
+            return set()
+
+    @classmethod
+    def _discard_files_created_since(cls, path: str, files_before: set[str]) -> None:
+        """Removes only what the failed attempt added, never a page that was downloaded successfully.
+
+        Cleanup must never replace the download failure with an error of its own, so anything that goes wrong
+        removing a file is logged and swallowed; the caller still sees the ChunkedEncodingError.
+        """
+        for name in sorted(cls._list_files(path) - files_before):
+            try:
+                os.remove(os.path.join(path, name))
+            except OSError as remove_error:
+                logging.warning(f"Could not remove the partial result file {name}: {remove_error}.")
 
 
 class SalesforceClient(HttpClient):

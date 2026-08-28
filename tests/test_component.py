@@ -48,6 +48,16 @@ def truncated_result_page() -> ChunkedEncodingError:
     return ChunkedEncodingError(ProtocolError("Response ended prematurely"))
 
 
+def raise_truncated_result_page(*_args, **_kwargs):
+    """mock side_effect raising a fresh truncated_result_page() on every call.
+
+    A single shared instance handed to side_effect would be re-raised on every retry and accumulate
+    __traceback__ frames across them, so each attempt gets its own - the same reason
+    raise_dropped_connection exists.
+    """
+    raise truncated_result_page()
+
+
 class LocalHttpServer:
     """A local TCP server used to exercise the mounted retry adapter against real socket behaviour.
 
@@ -271,7 +281,7 @@ class TestTruncatedResultPageRetries(unittest.TestCase):
     @mock.patch('time.sleep', return_value=None)
     def test_truncated_page_is_retried_then_reraises(self, _sleep):
         bulk2 = self._build_bulk2()
-        bulk2._client.download_job_data.side_effect = truncated_result_page()
+        bulk2._client.download_job_data.side_effect = raise_truncated_result_page
 
         with tempfile.TemporaryDirectory() as path:
             with self.assertRaises(ChunkedEncodingError):

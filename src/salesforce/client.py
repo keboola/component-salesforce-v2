@@ -61,10 +61,10 @@ RETRIED_DESCRIBE_ERRORS = (SalesforceClientException, RequestsConnectionError)
 # the transport retries mounted in _mount_transport_retries provably cannot see it. Nothing else retries it, so a
 # single truncated page killed the whole job with an opaque internal error. Only this one exception is retried:
 # it can only be raised while reading a response body, never in place of a response the component already handles.
-DOWNLOAD_RESULT_MAX_TRIES = 3
-# One delay per retry, so three attempts wait 2 s and then 4 s. A page that keeps failing costs 6 s more
+# One delay per retry, so three attempts in total wait 2 s and then 4 s. A page that keeps failing costs 6 s more
 # than it used to before the job dies with the same exception it dies with today.
 DOWNLOAD_RESULT_RETRY_DELAYS = (2, 4)
+DOWNLOAD_RESULT_MAX_TRIES = len(DOWNLOAD_RESULT_RETRY_DELAYS) + 1
 
 
 class SalesforceBulk2(SFBulk2Type):
@@ -105,25 +105,24 @@ class SalesforceBulk2(SFBulk2Type):
         a failed attempt is removed before the next one runs - `path` therefore holds exactly the pages it held
         before the attempt, and a retry can never add a duplicate or partial slice.
 
-        The final attempt is deliberately left alone: it re-raises the original exception without cleaning up,
-        so a download that keeps failing ends with the very same exception and the very same directory contents
-        as before this method existed. Only ChunkedEncodingError is retried, and it can only be raised while a
-        response body is being read - every response the component already handled, error responses included,
-        is passed through untouched.
+        The last attempt is the unwrapped call the loop below used to make on its own, so a download that keeps
+        failing ends with the very same exception and the very same directory contents as before this method
+        existed. Only ChunkedEncodingError is retried, and it can only be raised while a response body is being
+        read - every response the component already handled, error responses included, is passed through
+        untouched.
         """
-        for attempt in range(1, DOWNLOAD_RESULT_MAX_TRIES + 1):
+        for attempt, delay in enumerate(DOWNLOAD_RESULT_RETRY_DELAYS, start=1):
             files_before = self._list_files(path)
             try:
                 return self._client.download_job_data(path, job_id, locator, max_records)
             except ChunkedEncodingError as e:
-                if attempt == DOWNLOAD_RESULT_MAX_TRIES:
-                    raise
                 self._discard_files_created_since(path, files_before)
-                delay = DOWNLOAD_RESULT_RETRY_DELAYS[attempt - 1]
                 logging.warning(f"Salesforce ended the result download prematurely ({e}). Discarded the partial "
                                 f"page and retrying in {delay} s "
                                 f"(attempt {attempt + 1} of {DOWNLOAD_RESULT_MAX_TRIES}).")
                 time.sleep(delay)
+
+        return self._client.download_job_data(path, job_id, locator, max_records)
 
     @staticmethod
     def _list_files(path: str) -> set[str]:

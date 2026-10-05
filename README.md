@@ -11,9 +11,14 @@ and saves it into the out/tables directory.
 ## Choose an authorization method
 
 In order to authorize the component you can select one of the following methods of authorization:
-* With a username, password, and **Security Token**
-* With a username, password, and **External Client App** (formerly Connected App)
-* With a Consumer Key and a Consumer Secret using **OAuth 2.0 Client Credentials Flow**
+* With a Consumer Key and a Consumer Secret using **OAuth 2.0 Client Credentials Flow** - recommended
+* With a username, password, and **Security Token** - **deprecated**, Salesforce retires it in Summer '27
+* With a username, password, and **External Client App** (formerly Connected App) - **deprecated**, Salesforce
+  retires it on **2027-02-20**
+
+Salesforce is retiring both username and password methods. See
+[Retirement of the username and password login methods](#retirement-of-the-username-and-password-login-methods)
+for the dates and the migration steps.
 
 In the sections below we describe how to obtain a security token and how to set up an External Client App.
 
@@ -64,22 +69,70 @@ To create an External Client App with Client Credentials Flow:
 8. Retrieve the Consumer Key and Secret from the **Settings** tab → **OAuth Settings** → **Consumer Key and Secret**.
 9. Provide your Salesforce domain in the Keboola configuration (e.g., `https://your-org.my.salesforce.com`).
 
+## Retirement of the username and password login methods
+
+Salesforce is retiring the two login methods that send a username and a password. Only **Connected App OAuth
+2.0 Client Credentials** (`connected_app_oauth_cc`) continues to work.
+
+| Login method | What it uses | Stops working |
+| --- | --- | --- |
+| `connected_app` - Connected App with Username and Password | OAuth 2.0 username-password flow | **2027-02-20** |
+| `security_token` - Security Token with Username and Password | SOAP API `login()` | Summer '27 release, about May 2027 |
+| `connected_app_oauth_cc` - Connected App OAuth 2.0 Client Credentials | OAuth 2.0 client credentials flow | not affected |
+
+Both retiring methods are already unavailable in new Salesforce orgs: the username-password flow in orgs created
+in Summer '26 or later, and `login()` in orgs created in Winter '26 or later. A configuration that still uses a
+retiring method prints a warning in its job log on every run.
+
+Raising the API version does not help. `login()` exists only up to API version 64.0 and is retired as a whole,
+and the username-password flow is retired for every version.
+
+The default login method of a new configuration is still `security_token`. The Keboola config UI writes a
+schema default into a stored configuration the first time a user opens and saves it, so changing the default
+would rewrite every older configuration that has no `login_method` of its own into a method its stored
+credentials cannot satisfy. Those configurations have to be backfilled with
+`"login_method": "security_token"` before the default can move.
+
+### Migrating to Client Credentials
+
+1. Follow [Enabling Client Credentials Flow](#enabling-client-credentials-flow) on the Salesforce side. If you
+   already use `connected_app`, you keep the same app: you only enable the Client Credentials Flow on it and set
+   a **Run As** user.
+2. In the Keboola configuration, set **Login Method** to *Connected App OAuth 2.0 Client Credentials*.
+3. Fill in **Domain** with your Salesforce domain, for example `https://your-org.my.salesforce.com`.
+4. Keep (or re-enter) the **Consumer Key** and **Consumer Secret**. A `connected_app` configuration already holds
+   both, and they stay valid.
+5. Run the configuration to confirm the login works. **Username**, **Password** and **Security Token** are not
+   used by this method.
+
+Because this method authenticates as the app's Run As user and not as the person who created the configuration,
+check that the Run As user has access to every object the configuration reads.
+
 # Configuration
 
 ## Authorization
 
-- **Login Method** (login_method) - Select either "security_token" or "connected_app", Default : "security_token"
-- **Username** (username) - (REQ) your username, when exporting data from sandbox don't forget to add .sandboxname at the end
-- **Password** (#password) - (REQ) your password
+- **Login Method** (login_method) - One of `connected_app_oauth_cc`, `connected_app` or `security_token`.
+  Default: `security_token`. Use `connected_app_oauth_cc`; the other two are deprecated, see
+  [Retirement of the username and password login methods](#retirement-of-the-username-and-password-login-methods).
 - **Sandbox** (sandbox) - (REQ) true when you want to export data from sandbox
 
-If "security_token" login method is selected:
+If `connected_app_oauth_cc` login method is selected (recommended):
+- **Consumer Key** (#consumer_key) - (REQ) The Consumer Key of your External Client App or Connected App
+- **Consumer Secret** (#consumer_secret) - (REQ) The Consumer Secret of your External Client App or Connected App
+- **Domain** (domain) - (REQ) Your Salesforce domain, e.g. `https://your-org.my.salesforce.com`
+
+If `security_token` login method is selected (DEPRECATED):
+- **Username** (username) - (REQ) your username, when exporting data from sandbox don't forget to add .sandboxname at the end
+- **Password** (#password) - (REQ) your password
 - **Security Token** (#security_token) - (REQ) your security token, don't forget it is different for sandbox
 
-If "connected_app" login method:
+If `connected_app` login method is selected (DEPRECATED):
+- **Username** (username) - (REQ) your username
+- **Password** (#password) - (REQ) your password
 - **Consumer Key** (#consumer_key) - (REQ) The Consumer Key of your Connected App
 - **Consumer Secret** (#consumer_secret) - (REQ) The Consumer Secret of your Connected App
-- 
+
 ## Row configuration
  - Query type (query_type_selector) - [REQ] Either "Object" or  "Custom SOQL"
  - Get deleted records (is_deleted) - [OPT] Fetch records that have been deleted

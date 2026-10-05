@@ -60,6 +60,11 @@ RECORDS_NOT_FOUND = ["Records not found for this query"]
 REQUIRED_PARAMETERS = [[KEY_SOQL_QUERY, KEY_OBJECT]]
 REQUIRED_IMAGE_PARS = []
 
+# The fallback for configurations that do not store "login_method" at all. It MUST stay "security_token":
+# those configurations were created before the parameter existed and hold a username, a password and a security
+# token, so this is the only method their stored credentials can satisfy. Changing it to the surviving method
+# would make every one of them fail on the next run with "Parameter 'domain' is needed". The schema default,
+# which applies to newly created configurations only, is the one that points at the surviving method.
 DEFAULT_LOGIN_METHOD = "security_token"
 
 
@@ -71,6 +76,31 @@ class LoginType(str, Enum):
     @classmethod
     def list(cls):
         return list(map(lambda c: c.value, cls))
+
+
+# Salesforce retires the two login methods that send a username and a password. Only the client credentials
+# flow survives. Dates and the behaviour for new orgs come from the Salesforce release update and the SOAP API
+# guide; see README.md. The warnings below are the only notice that reaches every affected configuration, so
+# they are emitted on every run, and they never stop the job - Salesforce itself produces the hard error on the
+# day it enforces the retirement.
+RETIREMENT_NOTICE = {
+    LoginType.CONNECTED_APP_LOGIN: (
+        "Login method 'connected_app' (Connected App with Username and Password) uses the OAuth 2.0 "
+        "username-password flow. Salesforce retires that flow on 2027-02-20, and orgs created in Summer '26 or "
+        "later cannot use it at all. Move this configuration to 'connected_app_oauth_cc' (Connected App OAuth "
+        "2.0 Client Credentials) before that date. The Consumer Key and Consumer Secret you already have stay "
+        "valid: enable the Client Credentials Flow on the Salesforce app, set the 'domain' parameter, and "
+        "change the login method. See the component documentation for the steps."
+    ),
+    LoginType.SECURITY_TOKEN_LOGIN: (
+        "Login method 'security_token' (Security Token with Username and Password) uses the SOAP API login() "
+        "call. Salesforce retires login() in the Summer '27 release (about May 2027), and it is disabled by "
+        "default in orgs created in Winter '26 or later. Move this configuration to 'connected_app_oauth_cc' "
+        "(Connected App OAuth 2.0 Client Credentials) before that release. This needs a Connected App or "
+        "External Client App with the Client Credentials Flow enabled, its Consumer Key and Consumer Secret, "
+        "and the 'domain' parameter. See the component documentation for the steps."
+    ),
+}
 
 
 def ordereddict_to_dict(value):
@@ -87,6 +117,10 @@ def ordereddict_to_dict(value):
 class Component(ComponentBase):
     def __init__(self):
         super().__init__()
+        # _login_to_salesforce is wrapped in @retry, so it resolves the login method up to three times per run.
+        # The retirement warning is reported once per run regardless, so a failing login does not print the same
+        # migration instructions three times and make it read like three separate problems.
+        self._login_method_reported = False
 
     def run(self):
         self.validate_configuration_parameters(REQUIRED_PARAMETERS)
@@ -420,13 +454,37 @@ class Component(ComponentBase):
             )
 
     def _get_login_method(self) -> LoginType:
-        login_type_name = self.configuration.parameters.get(KEY_LOGIN_METHOD, DEFAULT_LOGIN_METHOD)
+        configured = self.configuration.parameters.get(KEY_LOGIN_METHOD)
+        login_type_name = DEFAULT_LOGIN_METHOD if configured is None else configured
         try:
-            return LoginType(login_type_name)
+            login_method = LoginType(login_type_name)
         except ValueError as val_err:
             raise UserException(
                 f"'{login_type_name}' is not a valid Login Type. Enter one of : {LoginType.list()}"
             ) from val_err
+
+        self._report_login_method(login_method, explicit=configured is not None)
+        return login_method
+
+    def _report_login_method(self, login_method: LoginType, explicit: bool) -> None:
+        """Name the login method in the job log, and warn when Salesforce is retiring it.
+
+        The info line exists so the split between the three methods can be counted across all projects before
+        the retirement dates - nothing in the log identified the method until now, so the size of each affected
+        group could not be measured. It also tells apart a configuration that selected 'security_token' from one
+        that stores no login_method at all and only falls back to it; those two groups need different migration
+        instructions, and only the second one is also exposed to a change of the schema default.
+        """
+        if self._login_method_reported:
+            return
+        self._login_method_reported = True
+
+        source = "configured" if explicit else f"not set, falling back to the default '{DEFAULT_LOGIN_METHOD}'"
+        logging.info(f"Login method: {login_method.value} ({source})")
+
+        notice = RETIREMENT_NOTICE.get(login_method)
+        if notice:
+            logging.warning(notice)
 
     @staticmethod
     def process_salesforce_domain(url):

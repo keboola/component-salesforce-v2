@@ -16,7 +16,8 @@ import requests
 from freezegun import freeze_time
 from requests.exceptions import ConnectionError as RequestsConnectionError
 
-from component import Component
+from component import DEFAULT_LOGIN_METHOD, Component, LoginType
+from keboola.component.exceptions import UserException
 from salesforce.client import SalesforceClient
 
 
@@ -234,3 +235,156 @@ class TestDroppedConnectionRetries(unittest.TestCase):
 if __name__ == "__main__":
     # import sys;sys.argv = ['', 'Test.testName']
     unittest.main()
+
+
+class TestLoginMethodRetirement(unittest.TestCase):
+    """The two username-and-password login methods warn, and no stored configuration changes behaviour."""
+
+    _CREDENTIALS = {
+        'username': 'user@example.com',
+        '#password': 'password',
+        '#security_token': 'token',
+        '#consumer_key': 'key',
+        '#consumer_secret': 'secret',
+        'domain': 'example.my.salesforce.com',
+        'sandbox': False,
+        'api_version': '52.0',
+    }
+
+    @contextlib.contextmanager
+    def _component(self, parameters):
+        # Same handler juggling as TestDroppedConnectionRetries._build_component: ComponentBase.__init__ appends
+        # root handlers without removing the existing ones, so without this a second Component() in-process makes
+        # assertLogs see every record twice.
+        with tempfile.TemporaryDirectory() as data_dir:
+            with open(os.path.join(data_dir, 'config.json'), 'w', encoding='utf-8') as config_file:
+                json.dump({'parameters': parameters}, config_file)
+            root_logger = logging.getLogger()
+            original_handlers = root_logger.handlers[:]
+            root_logger.handlers.clear()
+            try:
+                with mock.patch.dict(os.environ, {'KBC_DATADIR': data_dir}):
+                    yield Component()
+            finally:
+                root_logger.handlers[:] = original_handlers
+
+    def _resolve(self, parameters):
+        """Resolve the login method and return (resolved method, captured log records)."""
+        with self._component(parameters) as component:
+            with self.assertLogs(level=logging.INFO) as captured:
+                resolved = component._get_login_method()
+        return resolved, captured.records
+
+    def test_configuration_without_login_method_still_uses_security_token(self):
+        """The backwards-compatibility guarantee of this change.
+
+        Configurations that predate the login_method parameter hold only a username, a password and a security
+        token. The run-time fallback must keep resolving to security_token for them: the schema default now
+        points at connected_app_oauth_cc, and if that leaked into the fallback every one of these configurations
+        would fail on its next run with "Parameter 'domain' is needed".
+        """
+        parameters = {key: value for key, value in self._CREDENTIALS.items()
+                      if key in ('username', '#password', '#security_token', 'sandbox', 'api_version')}
+
+        resolved, records = self._resolve(parameters)
+
+        self.assertEqual(LoginType.SECURITY_TOKEN_LOGIN, resolved)
+        info = [record for record in records if record.levelno == logging.INFO]
+        self.assertTrue(any('falling back to the default' in record.getMessage() for record in info), info)
+
+    def test_security_token_warns_about_the_soap_login_retirement(self):
+        resolved, records = self._resolve({**self._CREDENTIALS, 'login_method': 'security_token'})
+
+        self.assertEqual(LoginType.SECURITY_TOKEN_LOGIN, resolved)
+        warnings = [record.getMessage() for record in records if record.levelno == logging.WARNING]
+        self.assertEqual(1, len(warnings), warnings)
+        self.assertIn('connected_app_oauth_cc', warnings[0])
+        self.assertIn("Summer '27", warnings[0])
+
+    def test_connected_app_warns_about_the_username_password_flow_retirement(self):
+        resolved, records = self._resolve({**self._CREDENTIALS, 'login_method': 'connected_app'})
+
+        self.assertEqual(LoginType.CONNECTED_APP_LOGIN, resolved)
+        warnings = [record.getMessage() for record in records if record.levelno == logging.WARNING]
+        self.assertEqual(1, len(warnings), warnings)
+        self.assertIn('connected_app_oauth_cc', warnings[0])
+        self.assertIn('2027-02-20', warnings[0])
+
+    def test_client_credentials_flow_is_not_deprecated_and_does_not_warn(self):
+        resolved, records = self._resolve({**self._CREDENTIALS, 'login_method': 'connected_app_oauth_cc'})
+
+        self.assertEqual(LoginType.CONNECTED_APP_OAUTH_CC, resolved)
+        self.assertEqual([], [record.getMessage() for record in records if record.levelno >= logging.WARNING])
+
+    def test_the_warning_is_reported_once_even_though_the_login_is_retried(self):
+        """_login_to_salesforce carries @retry(tries=3), so it resolves the login method up to three times."""
+        with self._component({**self._CREDENTIALS, 'login_method': 'security_token'}) as component:
+            with self.assertLogs(level=logging.INFO) as captured:
+                for _ in range(3):
+                    component._get_login_method()
+
+        warnings = [record for record in captured.records if record.levelno == logging.WARNING]
+        self.assertEqual(1, len(warnings))
+
+    def test_an_unknown_login_method_still_fails_with_the_same_user_error(self):
+        with self._component({**self._CREDENTIALS, 'login_method': 'nonsense'}) as component:
+            with self.assertRaises(UserException) as raised:
+                component._get_login_method()
+        self.assertIn('is not a valid Login Type', str(raised.exception))
+
+
+class TestConfigSchemaLoginMethod(unittest.TestCase):
+    """The schema default must not be flipped to the surviving method before stored configurations are migrated."""
+
+    @staticmethod
+    def _schema():
+        schema_path = os.path.join(os.path.dirname(__file__), '..', 'component_config', 'configSchema.json')
+        with open(schema_path, encoding='utf-8') as schema_file:
+            return json.load(schema_file)
+
+    def test_the_schema_default_matches_the_run_time_fallback(self):
+        """The invariant that keeps legacy configurations working. Do not relax it without a config migration.
+
+        The two defaults look independent but are not. The Keboola config UI fills a property that a stored
+        configuration does not have with the schema default and writes it back the first time a user opens and
+        saves the configuration, for any edit. A configuration created before login_method existed holds a
+        username, a password and a security token and no login_method. If the schema default pointed at
+        connected_app_oauth_cc, an unrelated edit would write that method into it and the next run would fail
+        with "Parameter 'domain' is needed" - the exact group DEFAULT_LOGIN_METHOD exists to protect.
+
+        Making connected_app_oauth_cc the default is therefore not a change to this file alone. Backfill
+        "login_method": "security_token" into every stored configuration that lacks it first; after that no
+        configuration depends on either default and both can be moved together.
+        """
+        self.assertEqual(DEFAULT_LOGIN_METHOD, self._schema()['properties']['login_method']['default'])
+
+    def test_no_field_hidden_by_the_default_login_method_is_required(self):
+        """A field hidden by options.dependencies cannot be filled in, so requiring it makes the form unsaveable.
+
+        This is the second trap in moving the default: username and #password are in the root required list and
+        are shown only for the two username and password methods.
+        """
+        schema = self._schema()
+        default_method = schema['properties']['login_method']['default']
+
+        for field in schema.get('required', []):
+            dependencies = schema['properties'][field].get('options', {}).get('dependencies', {})
+            allowed = dependencies.get('login_method')
+            if allowed is None:
+                continue
+            allowed = [allowed] if isinstance(allowed, str) else allowed
+            self.assertIn(default_method, allowed, f"required field '{field}' is hidden for the default method")
+
+    def test_every_login_method_in_the_code_is_offered_by_the_schema(self):
+        login_method = self._schema()['properties']['login_method']
+
+        self.assertEqual(LoginType.list(), login_method['enum'])
+        self.assertEqual(len(login_method['enum']), len(login_method['options']['enum_titles']))
+
+    def test_both_retiring_methods_are_marked_deprecated_in_the_dropdown(self):
+        login_method = self._schema()['properties']['login_method']
+        titles = dict(zip(login_method['enum'], login_method['options']['enum_titles']))
+
+        self.assertIn('DEPRECATED', titles['security_token'])
+        self.assertIn('DEPRECATED', titles['connected_app'])
+        self.assertNotIn('DEPRECATED', titles['connected_app_oauth_cc'])

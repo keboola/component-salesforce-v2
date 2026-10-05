@@ -19,13 +19,13 @@
       ],
       "options": {
         "enum_titles": [
-          "Security Token with Username and Password",
-          "Connected App with Username and Password",
-          "Connected App OAuth Client 2.0 Client Credentials"
+          "Security Token with Username and Password (DEPRECATED - retired by Salesforce in Summer '27)",
+          "Connected App with Username and Password (DEPRECATED - retired by Salesforce on 2027-02-20)",
+          "Connected App OAuth 2.0 Client Credentials (recommended)"
         ]
       },
       "default": "security_token",
-      "description": "Specify the login method you wish to use",
+      "description": "Salesforce is retiring both username and password login methods. Change this to Connected App OAuth 2.0 Client Credentials. Connected App with Username and Password stops working on 2027-02-20, Security Token with Username and Password in the Summer '27 release (about May 2027); both are already unavailable in new Salesforce orgs.",
       "propertyOrder": 1
     },
     "username": {
